@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AccèsGrandMTL — Répertoire des lieux accessibles (Montréal, Rive-Sud, Rive-Nord)</title>
+  <meta name="description" content="Répertoire multilingue et carte interactive des lieux accessibles aux personnes à mobilité réduite dans le Grand Montréal (soins, AVD, loisirs, transport, parcs, sports)." />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-2: #f1f5f9;
+      --surface-hover: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --border: #e2e8f0;
+      --primary: #0f766e;
+      --primary-hover: #0d625b;
+      --primary-soft: #ccfbf1;
+      --primary-text: #115e59;
+      --accent: #2563eb;
+      --danger: #e11d48;
+      --verified-bg: #dcfce7;
+      --verified-text: #166534;
+      --shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+      --radius: 12px;
+      --font-scale: 1;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0b1120;
+      --surface: #131c31;
+      --surface-2: #1e293b;
+      --surface-hover: #293548;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #263449;
+      --primary: #14b8a6;
+      --primary-hover: #2dd4bf;
+      --primary-soft: rgba(20, 184, 166, 0.16);
+      --primary-text: #5eead4;
+      --accent: #60a5fa;
+      --danger: #fb7185;
+      --verified-bg: rgba(34, 197, 94, 0.18);
+      --verified-text: #86efac;
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    [data-theme="contrast"] {
+      --bg: #000000;
+      --surface: #0a0a0a;
+      --surface-2: #1a1a1a;
+      --surface-hover: #2c2c2c;
+      --text: #ffffff;
+      --text-muted: #fef08a;
+      --border: #facc15;
+      --primary: #facc15;
+      --primary-hover: #fde047;
+      --primary-soft: #272700;
+      --primary-text: #fef08a;
+      --accent: #38bdf8;
+      --danger: #ff6b6b;
+      --verified-bg: #14532d;
+      --verified-text: #ffffff;
+      --shadow: none;
+    }
+
+    [data-large-text="true"] { --font-scale: 1.18; }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: calc(15px * var(--font-scale));
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; z-index: 500;
+      box-shadow: var(--shadow);
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-logo {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--primary); color: #fff;
+      display: grid; place-items: center; font-size: 20px; font-weight: 800;
+      flex-shrink: 0;
+    }
+    [data-theme="contrast"] .brand-logo { color: #000; }
+    .brand h1 { margin: 0; font-size: 1.12rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand-sub { font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .sync-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--primary-soft); color: var(--primary-text);
+      padding: 2px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 7px 11px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--surface-hover); }
+    .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    [data-theme="contrast"] .btn-primary { color: #000; }
+    .btn.active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-text); }
+
+    select.lang-select {
+      padding: 7px 10px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--surface-2);
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+
+    /* Main Split */
+    .workspace { display: flex; flex: 1; min-height: 0; position: relative; }
+
+    .sidebar {
+      width: 470px; max-width: 100%;
+      background: var(--bg);
+      border-inline-end: 1px solid var(--border);
+      display: flex; flex-direction: column; min-height: 0;
+    }
+
+    .controls-panel {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+      max-height: 55vh; overflow-y: auto;
+    }
+
+    .search-row { display: flex; gap: 6px; }
+    .search-input-wrap { position: relative; flex: 1; }
+    .search-input {
+      width: 100%; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--surface-2);
+      outline: none; font-size: 0.92rem;
+    }
+    .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+
+    .geo-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .geo-row select, .geo-row .btn { font-size: 0.82rem; padding: 6px 9px; }
+
+    .section-label {
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 4px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip {
+      padding: 5px 9px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface-2);
+      font-size: 0.78rem; font-weight: 600; color: var(--text);
+      display: inline-flex; align-items: center; gap: 5px; transition: 0.12s;
+    }
+    .chip:hover { background: var(--surface-hover); }
+    .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    [data-theme="contrast"] .chip.active { color: #000; }
+    .chip .cnt { opacity: 0.8; font-size: 0.73rem; }
+
+    .filter-toggle-btn {
+      background: transparent; border: none; color: var(--primary);
+      font-size: 0.8rem; font-weight: 700; padding: 2px 4px;
+    }
+
+    .results-bar {
+      padding: 8px 14px; font-size: 0.82rem; color: var(--text-muted);
+      background: var(--surface-2); border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+
+    .results-list {
+      flex: 1; overflow-y: auto; padding: 10px 12px 24px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s, transform 0.12s;
+      cursor: pointer;
+    }
+    .card:hover { border-color: var(--primary); }
+    .card.selected { border: 2px solid var(--primary); }
+
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .card-title { margin: 0; font-size: 0.98rem; font-weight: 700; color: var(--text); }
+    .fav-btn {
+      background: transparent; border: none; font-size: 1.25rem;
+      line-height: 1; padding: 2px 4px; color: var(--text-muted); flex-shrink: 0;
+    }
+    .fav-btn.is-fav { color: var(--danger); }
+
+    .card-meta {
+      margin: 5px 0 6px; font-size: 0.8rem; color: var(--text-muted);
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 7px; border-radius: 6px; font-size: 0.73rem; font-weight: 700;
+      background: var(--surface-2); color: var(--text);
+    }
+    .badge-verified { background: var(--verified-bg); color: var(--verified-text); }
+    .badge-dist { background: var(--primary-soft); color: var(--primary-text); }
+
+    .card-desc { margin: 6px 0 8px; font-size: 0.85rem; color: var(--text); }
+    .feat-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .feat-tag {
+      font-size: 0.72rem; padding: 2px 7px; border-radius: 6px;
+      background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted);
+    }
+
+    .card-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; flex-wrap: wrap; padding-top: 8px;
+      border-top: 1px dashed var(--border); font-size: 0.8rem;
+    }
+    .card-links { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    /* Map */
+    .map-pane { flex: 1; position: relative; min-height: 0; }
+    #map { width: 100%; height: 100%; z-index: 1; background: var(--surface-2); }
+
+    .map-floating-bar {
+      position: absolute; top: 12px; inset-inline-end: 12px; z-index: 400;
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .map-floating-bar .btn { box-shadow: var(--shadow); background: var(--surface); }
+
+    /* Dark-mode Leaflet UI polish */
+    [data-theme="dark"] .leaflet-popup-content-wrapper,
+    [data-theme="dark"] .leaflet-popup-tip {
+      background: #131c31; color: #f1f5f9; border: 1px solid #334155;
+    }
+    [data-theme="dark"] .leaflet-bar a {
+      background: #131c31; color: #f1f5f9; border-color: #334155;
+    }
+    [data-theme="dark"] .leaflet-control-attribution {
+      background: rgba(15, 23, 42, 0.82); color: #94a3b8;
+    }
+    [data-theme="dark"] .leaflet-control-attribution a { color: #5eead4; }
+    [data-theme="contrast"] .leaflet-tile-pane { filter: contrast(1.45) grayscale(0.4); }
+
+    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+      background-color: rgba(15, 118, 110, 0.25) !important;
+    }
+    .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+      background-color: var(--primary) !important; color: #fff !important; font-weight: 700;
+    }
+    [data-theme="contrast"] .marker-cluster-small div,
+    [data-theme="contrast"] .marker-cluster-medium div,
+    [data-theme="contrast"] .marker-cluster-large div { color: #000 !important; }
+
+    /* Mobile bottom switcher */
+    .mobile-nav {
+      display: none;
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 8px 12px; gap: 8px; z-index: 500;
+    }
+    .mobile-nav .btn { flex: 1; padding: 9px; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(2, 6, 23, 0.65);
+      display: none; align-items: center; justify-content: center;
+      padding: 16px; z-index: 1000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 16px;
+      width: 560px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+      padding: 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .modal-header h2 { margin: 0; font-size: 1.15rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-field label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+    .form-field input, .form-field select, .form-field textarea {
+      padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface-2);
+    }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #0f172a; color: #fff; padding: 10px 18px;
+      border-radius: 999px; font-size: 0.88rem; font-weight: 600;
+      z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .toast.show { opacity: 1; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .sidebar { width: 100%; border-inline-end: none; }
+      .workspace.mobile-map .sidebar { display: none; }
+      .workspace.mobile-list .map-pane { display: none; }
+      .mobile-nav { display: flex; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Print patient handout */
+    @media print {
+      body, .app { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+      header .header-actions, .controls-panel, .map-pane, .mobile-nav, .fav-btn, .card-footer button, .load-more-wrap { display: none !important; }
+      header { box-shadow: none !important; border-bottom: 2px solid #000 !important; }
+      .sidebar { width: 100% !important; border: none !important; }
+      .results-list { overflow: visible !important; padding: 10px 0 !important; }
+      .card { break-inside: avoid; border: 1px solid #999 !important; box-shadow: none !important; color: #000 !important; background: #fff !important; margin-bottom: 10px; }
+      .card-desc, .card-meta, .feat-tag { color: #222 !important; }
+      .print-banner { display: block !important; margin: 8px 0 12px; font-size: 13px; border: 1px solid #000; padding: 8px; }
+    }
+    .print-banner { display: none; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="brand-logo" aria-hidden="true">♿</div>
+      <div>
+        <h1>AccèsGrandMTL</h1>
+        <div class="brand-sub">
+          <span data-i18n="subtitle">Montréal • Rive-Sud • Rive-Nord</span>
+          <span class="sync-pill" id="syncBadge">⏳ ...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <select id="langSelect" class="lang-select" aria-label="Langue">
+        <option value="fr">Français</option>
+        <option value="en">English</option>
+        <option value="zh">中文 (Mandarin)</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="ar">العربية</option>
+        <option value="es">Español</option>
+        <option value="ht">Kreyòl Ayisyen</option>
+      </select>
+      <button class="btn" id="themeBtn" title="Changer le thème (Clair / Sombre / Contraste)">🌙 <span data-i18n="theme_dark">Sombre</span></button>
+      <button class="btn" id="textSizeBtn" title="Agrandir le texte">A+</button>
+      <button class="btn" id="favFilterBtn">❤️ <span data-i18n="favorites">Favoris</span> (<span id="favCount">0</span>)</button>
+      <button class="btn" id="printBtn">🖨️ <span data-i18n="print_sheet">Fiche patient</span></button>
+      <button class="btn" id="shareBtn">🔗 <span data-i18n="share">Partager</span></button>
+      <button class="btn btn-primary" id="suggestBtn">➕ <span data-i18n="suggest">Suggérer</span></button>
+      <button class="btn" id="infoBtn" aria-label="Sources">ℹ️</button>
+    </div>
+  </header>
+
+  <div class="print-banner" id="printBanner">
+    <strong>AccèsGrandMTL — Fiche personnalisée de lieux accessibles</strong> • Grand Montréal (Montréal, Rive-Sud, Rive-Nord). Vérifiez toujours les horaires ou travaux temporaires avant de vous déplacer.
+  </div>
+
+  <div class="workspace mobile-list" id="workspace">
+    <aside class="sidebar">
+      <div class="controls-panel">
+        <div class="search-row">
+          <div class="search-input-wrap">
+            <input type="text" id="searchInput" class="search-input" placeholder="Rechercher un lieu, adresse ou code postal (ex. H2X, J4Y, H7T)..." />
+          </div>
+          <button class="btn btn-primary" id="searchGeoBtn" title="Chercher cette adresse / code postal">🔍</button>
+        </div>
+
+        <div class="geo-row">
+          <button class="btn" id="locateBtn">📍 <span data-i18n="my_location">Ma position</span></button>
+          <select id="radiusSelect" class="lang-select" aria-label="Rayon">
+            <option value="0" data-i18n="any_distance">Toute distance</option>
+            <option value="2">≤ 2 km</option>
+            <option value="5">≤ 5 km</option>
+            <option value="10">≤ 10 km</option>
+            <option value="25">≤ 25 km</option>
+            <option value="50">≤ 50 km</option>
+          </select>
+          <select id="regionSelect" class="lang-select" aria-label="Région">
+            <option value="all" data-i18n="all_regions">Tout le Grand Montréal</option>
+            <option value="montreal">Montréal</option>
+            <option value="rive-sud">Rive-Sud</option>
+            <option value="rive-nord">Rive-Nord / Laval</option>
+          </select>
+          <button class="btn" id="verifiedOnlyBtn">✅ <span data-i18n="verified_only">Vérifiés</span></button>
+        </div>
+
+        <div>
+          <div class="section-label">
+            <span data-i18n="categories_label">Catégories (Soins, AVD, Loisirs...)</span>
+            <button class="filter-toggle-btn" id="resetFiltersBtn" data-i18n="reset">Réinitialiser</button>
+          </div>
+          <div class="chips" id="categoryChips"></div>
+        </div>
+
+        <div>
+          <div class="section-label">
+            <span data-i18n="accessibility_label">Critères d'accessibilité</span>
+            <button class="filter-toggle-btn" id="toggleAccBtn">▾</button>
+          </div>
+          <div class="chips" id="featureChips"></div>
+        </div>
+      </div>
+
+      <div class="results-bar">
+        <span id="resultsCount">0 lieux</span>
+        <span id="activeGeoNote"></span>
+      </div>
+
+      <div class="results-list" id="resultsList"></div>
+    </aside>
+
+    <main class="map-pane">
+      <div id="map"></div>
+      <div class="map-floating-bar">
+        <button class="btn" id="resetMapBtn">🗺️ <span data-i18n="recenter">Recentrer</span></button>
+      </div>
+    </main>
+  </div>
+
+  <nav class="mobile-nav">
+    <button class="btn btn-primary" id="mobListBtn">📋 <span data-i18n="list_view">Liste</span></button>
+    <button class="btn" id="mobMapBtn">🗺️ <span data-i18n="map_view">Carte</span></button>
+  </nav>
+</div>
+
+<!-- Modal Suggérer un lieu -->
+<div class="modal-backdrop" id="suggestModal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>➕ <span data-i18n="suggest_title">Suggérer un lieu accessible</span></h2>
+      <button class="btn" onclick="closeModal('suggestModal')">✕</button>
+    </div>
+    <form id="suggestForm">
+      <div class="form-grid">
+        <div class="form-field full">
+          <label data-i18n="place_name">Nom de l'établissement *</label>
+          <input type="text" id="sName" required placeholder="Ex. Clinique d'optométrie..." />
+        </div>
+        <div class="form-field">
+          <label data-i18n="category">Catégorie</label>
+          <select id="sCategory"></select>
+        </div>
+        <div class="form-field">
+          <label data-i18n="region">Secteur</label>
+          <select id="sRegion">
+            <option value="montreal">Montréal</option>
+            <option value="rive-sud">Rive-Sud</option>
+            <option value="rive-nord">Rive-Nord / Laval</option>
+          </select>
+        </div>
+        <div class="form-field full">
+          <label data-i18n="address">Adresse complète *</label>
+          <input type="text" id="sAddress" required placeholder="Ex. 1234, boul. Taschereau, Brossard, QC" />
+        </div>
+        <div class="form-field">
+          <label data-i18n="phone">Téléphone</label>
+          <input type="text" id="sPhone" placeholder="514-..." />
+        </div>
+        <div class="form-field">
+          <label data-i18n="website">Site web</label>
+          <input type="url" id="sWebsite" placeholder="https://..." />
+        </div>
+        <div class="form-field full">
+          <label data-i18n="accessibility_label">Équipements observés</label>
+          <div class="chips" id="suggestFeatures"></div>
+        </div>
+        <div class="form-field full">
+          <label data-i18n="description">Description utile pour les patients</label>
+          <textarea id="sDesc" rows="3" placeholder="Ex. Rampe douce à l'entrée arrière, stationnement réservé, toilette large..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:8px;">
+        <button type="button" class="btn" id="copyCsvBtn">📋 Copier ligne CSV (GitHub)</button>
+        <button type="submit" class="btn btn-primary" data-i18n="save_local">Ajouter à ma carte</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Info & Sources -->
+<div class="modal-backdrop" id="infoModal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>ℹ️ Sources & Mise à jour hebdomadaire</h2>
+      <button class="btn" onclick="closeModal('infoModal')">✕</button>
+    </div>
+    <div id="infoContent" style="font-size:0.9rem;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+<script>
+// Fallback embarqué (si ouvert hors-ligne ou avant le premier chargement de ./data/places.json)
+const FALLBACK_PLACES = [{"id":"cur-chum","name":"CHUM – Centre hospitalier de l'Université de Montréal","category":"soins","region":"montreal","city":"Montréal","address":"1000, rue Saint-Denis, Montréal, QC H2X 0C1","lat":45.5112,"lng":-73.5576,"phone":"514-890-8000","website":"https://www.chumontreal.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Hôpital universitaire entièrement accessible, débarcadère couvert pour transport adapté, fauteuils roulants de prêt et lien intérieur direct avec le métro Champ-de-Mars (ascenseur).","desc_en":"Fully accessible university hospital with covered paratransit drop-off, loaner wheelchairs, and direct indoor access to Champ-de-Mars metro (elevator).","source":"curated","verified":true},{"id":"cur-irglm","name":"Institut de réadaptation Gingras-Lindsay-de-Montréal (IRGLM)","category":"soins","region":"montreal","city":"Montréal","address":"6300, avenue de Darlington, Montréal, QC H3S 2J4","lat":45.5059,"lng":-73.6317,"phone":"514-340-2085","website":"https://ciusss-centresudmtl.gouv.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre de référence en réadaptation physique (AVC, lésions médullaires, amputés). Entrée de plain-pied, débarcadère adapté, toilettes spacieuses et équipements spécialisés.","desc_en":"Specialized physical rehabilitation center (stroke, spinal cord injury, amputees). Step-free entry, adapted drop-off, spacious accessible restrooms and lifts.","source":"curated","verified":true},{"id":"cur-sacre-coeur","name":"Hôpital du Sacré-Cœur-de-Montréal","category":"soins","region":"montreal","city":"Montréal","address":"5400, boulevard Gouin Ouest, Montréal, QC H4J 1C5","lat":45.5332,"lng":-73.7136,"phone":"514-338-2222","website":"https://ciusssnordmtl.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre tertiaire de traumatologie et réadaptation. Débarcadère adapté à l'entrée principale, stationnement réservé, ascenseurs larges et toilettes accessibles à chaque étage.","desc_en":"Tertiary trauma hospital with adapted main drop-off, reserved parking, wide elevators, and accessible restrooms on every floor.","source":"curated","verified":true},{"id":"cur-cusm-glen","name":"CUSM – Site Glen (Hôpital Royal Victoria & Hôpital de Montréal pour enfants)","category":"soins","region":"montreal","city":"Montréal","address":"1001, boulevard Décarie, Montréal, QC H4A 3J1","lat":45.473,"lng":-73.6012,"phone":"514-934-1934","website":"https://cusm.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Complexe hospitalier moderne conçu selon les normes d'accessibilité universelle, relié par tunnel accessible au métro Vendôme (ascenseurs) et à la gare exo.","desc_en":"Modern universally accessible hospital complex linked via step-free tunnel to Vendôme metro (elevators) and exo train station.","source":"curated","verified":true},{"id":"cur-marie-enfant","name":"Centre de réadaptation Marie Enfant (CHU Sainte-Justine)","category":"soins","region":"montreal","city":"Montréal","address":"5200, rue Bélanger, Montréal, QC H1T 1C9","lat":45.5734,"lng":-73.5754,"phone":"514-374-1710","website":"https://www.chusj.org","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre pédiatrique de réadaptation physique doté d'aides techniques, piscine thérapeutique avec mise à l'eau adaptée et accès universel complet.","desc_en":"Pediatric physical rehabilitation center featuring technical aids, adapted therapy pool lift, and full universal access.","source":"curated","verified":true},{"id":"cur-villa-medica","name":"Hôpital de réadaptation Villa Medica","category":"soins","region":"montreal","city":"Montréal","address":"225, rue Sherbrooke Est, Montréal, QC H2X 1C9","lat":45.5142,"lng":-73.5681,"phone":"514-288-8201","website":"https://www.villamedica.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Hôpital spécialisé en réadaptation orthopédique, neurologique et grands brûlés. Accès adapté sur la rue Sherbrooke et stationnement accessible.","desc_en":"Specialized orthopedic, neurological, and burn rehabilitation hospital with step-free Sherbrooke St. access and accessible parking.","source":"curated","verified":true},{"id":"cur-juif-mtl","name":"Hôpital général juif (HGJ)","category":"soins","region":"montreal","city":"Montréal","address":"3755, chemin de la Côte-Sainte-Catherine, Montréal, QC H3T 1E2","lat":45.4972,"lng":-73.6304,"phone":"514-340-8222","website":"https://www.hgj.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Pavillon K et entrée principale accessibles sans marche, portes automatiques, toilettes adaptées et stationnement réservé avec ascenseurs.","desc_en":"Pavilion K and main entrance step-free with automatic doors, adapted restrooms, and accessible parking with elevators.","source":"curated","verified":true},{"id":"cur-sainte-justine","name":"CHU Sainte-Justine","category":"soins","region":"montreal","city":"Montréal","address":"3175, chemin de la Côte-Sainte-Catherine, Montréal, QC H3T 1C5","lat":45.5023,"lng":-73.6244,"phone":"514-345-4931","website":"https://www.chusj.org","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre hospitalier mère-enfant entièrement accessible avec stationnement souterrain adapté, débarcadère couvert et toilettes familiales adaptées.","desc_en":"Fully accessible mother-child university hospital with accessible underground parking, covered drop-off, and adapted family restrooms.","source":"curated","verified":true},{"id":"cur-maisonneuve-rosemont","name":"Hôpital Maisonneuve-Rosemont","category":"soins","region":"montreal","city":"Montréal","address":"5415, boulevard de l'Assomption, Montréal, QC H1T 2M4","lat":45.5762,"lng":-73.5625,"phone":"514-252-3400","website":"https://ciusss-estmtl.gouv.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Accès adapté par l'entrée principale et la clinique externe, stationnement réservé près de la porte et ascenseurs accessibles.","desc_en":"Adapted access via main entrance and outpatient clinic, close reserved parking, and accessible elevators.","source":"curated","verified":true},{"id":"cur-icm","name":"Institut de Cardiologie de Montréal","category":"soins","region":"montreal","city":"Montréal","address":"5000, rue Bélanger, Montréal, QC H1T 1C8","lat":45.5739,"lng":-73.5778,"phone":"514-376-3330","website":"https://www.icm-mhi.org","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Entrée de plain-pied avec portes automatiques, service de fauteuils roulants à l'accueil et stationnement adapté.","desc_en":"Step-free entrance with automatic doors, wheelchairs at reception, and accessible parking.","source":"curated","verified":true},{"id":"cur-constance-lethbridge","name":"Centre de réadaptation Lethbridge-Layton-Mackay (Constance-Lethbridge)","category":"soins","region":"montreal","city":"Montréal","address":"7005, boulevard de Maisonneuve Ouest, Montréal, QC H4B 1T3","lat":45.4581,"lng":-73.6352,"phone":"514-487-1891","website":"https://www.ciussswestcentral.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Centre d'expertise en réadaptation motrice, déficience visuelle et aides techniques. Entièrement accessible avec repères tactiles.","desc_en":"Expertise center in motor rehabilitation, visual impairment, and technical aids. Fully accessible with tactile cues.","source":"curated","verified":true},{"id":"cur-verdun","name":"Hôpital de Verdun","category":"soins","region":"montreal","city":"Montréal","address":"4000, boulevard LaSalle, Montréal, QC H4G 2A3","lat":45.4601,"lng":-73.5671,"phone":"514-362-1000","website":"https://ciusss-centresudmtl.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Accès adapté avec portes automatiques, ascenseurs vers les cliniques externes et stationnement réservé.","desc_en":"Adapted access with automatic doors, elevators to outpatient clinics, and reserved parking.","source":"curated","verified":true},{"id":"cur-lasalle-hosp","name":"Hôpital de LaSalle","category":"soins","region":"montreal","city":"Montréal","address":"8585, terrasse Champlain, LaSalle, QC H8P 1C1","lat":45.4193,"lng":-73.6197,"phone":"514-362-8000","website":"https://www.ciusss-ouestmtl.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Hôpital communautaire avec accès de plain-pied, stationnement adapté face à l'entrée et toilettes accessibles.","desc_en":"Community hospital with step-free entry, adapted parking directly out front, and accessible restrooms.","source":"curated","verified":true},{"id":"cur-lakeshore","name":"Hôpital général du Lakeshore","category":"soins","region":"montreal","city":"Pointe-Claire","address":"160, avenue Stillview, Pointe-Claire, QC H9R 2Y2","lat":45.4565,"lng":-73.8166,"phone":"514-630-2225","website":"https://www.ciusss-ouestmtl.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Débarcadère adapté, stationnement réservé pour vignettes d'accessibilité, portes automatiques et ascenseurs.","desc_en":"Adapted drop-off, reserved accessible permit parking, automatic doors, and elevators.","source":"curated","verified":true},{"id":"cur-optometrie-udem","name":"Clinique universitaire de la vision (UdeM)","category":"soins","region":"montreal","city":"Montréal","address":"3744, rue Jean-Brillant, Montréal, QC H3T 1P1","lat":45.4979,"lng":-73.6196,"phone":"514-343-6082","website":"https://clinique.opto.umontreal.ca","features":["step_free","auto_door","toilet","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Clinique d'optométrie et basse vision avec salles d'examen adaptées aux fauteuils roulants et équipements inclinables.","desc_en":"Optometry and low-vision clinic with wheelchair-accessible exam rooms and adaptable equipment.","source":"curated","verified":true},{"id":"cur-dentaire-udem","name":"Clinique dentaire de l'Université de Montréal","category":"soins","region":"montreal","city":"Montréal","address":"2900, boulevard Édouard-Montpetit, Montréal, QC H3T 1J4","lat":45.5028,"lng":-73.6152,"phone":"514-343-6750","website":"https://medent.umontreal.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Soins dentaires avec cliniques accessibles par ascenseur et expérience auprès des clientèles à besoins particuliers.","desc_en":"Dental care clinics accessible by elevator with experience caring for patients with mobility needs.","source":"curated","verified":true},{"id":"cur-gmf-plateau","name":"Clinique médicale du Plateau (GMF)","category":"soins","region":"montreal","city":"Montréal","address":"4689, avenue Papineau, Montréal, QC H2H 1V4","lat":45.5335,"lng":-73.5754,"phone":"514-527-4501","website":"https://cliniqueduplateau.com","features":["step_free","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"GMF moderne avec entrée accessible, ascenseur vers les étages cliniques et salle de bain adaptée.","desc_en":"Modern family medicine group with accessible entrance, elevator to clinical floors, and adapted restroom.","source":"curated","verified":true},{"id":"cur-clinique-physio-udem","name":"Clinique de kinésiologie et physio CEPSUM (UdeM)","category":"soins","region":"montreal","city":"Montréal","address":"2100, boulevard Édouard-Montpetit, Montréal, QC H3T 1J4","lat":45.5091,"lng":-73.6106,"phone":"514-343-8050","website":"https://www.cepsum.umontreal.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Clinique de médecine du sport, physiothérapie et kinésiologie de plain-pied avec vestiaires et toilettes adaptés.","desc_en":"Sports medicine, physiotherapy, and kinesiology clinic with step-free entry and adapted restrooms.","source":"curated","verified":true},{"id":"cur-medicus-mtl","name":"Médicus Montréal – Orthèses, prothèses et aides à la mobilité","category":"pharmacie","region":"montreal","city":"Montréal","address":"5655, avenue de Marseille, Montréal, QC H1N 1J7","lat":45.5688,"lng":-73.5419,"phone":"514-255-5555","website":"https://medicus.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Spécialiste en fauteuils roulants, aides techniques, orthèses et prothèses. Salle d'essai spacieuse, stationnement adapté et réparation sur place.","desc_en":"Wheelchair, technical aids, orthotics, and prosthetics specialist. Spacious showroom, accessible parking, and on-site repairs.","source":"curated","verified":true},{"id":"cur-motion-mtl","name":"Motion – Équipements de mobilité et accessibilité (Montréal)","category":"pharmacie","region":"montreal","city":"Montréal","address":"3333, boulevard Crémazie Est, Montréal, QC H1Z 2H8","lat":45.5612,"lng":-73.6119,"phone":"514-381-1010","website":"https://motioncares.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Vente, location et entretien de fauteuils roulants manuels/motorisés, quadriporteurs, rampes portatives et lève-personnes.","desc_en":"Sales, rentals, and servicing of manual/power wheelchairs, scooters, portable ramps, and patient lifts.","source":"curated","verified":true},{"id":"cur-jc-chum","name":"Pharmacie Jean Coutu – Saint-Denis / CHUM","category":"pharmacie","region":"montreal","city":"Montréal","address":"1000, rue Saint-Denis (local RC), Montréal, QC H2X 0C1","lat":45.5116,"lng":-73.5582,"phone":"514-849-4551","website":"https://www.jeancoutu.com","features":["step_free","auto_door","wide_aisles"],"desc_fr":"Pharmacie de plain-pied avec allées larges, comptoir consultation accessible et accès intérieur depuis le CHUM.","desc_en":"Step-free pharmacy with wide aisles, accessible consultation counter, and indoor access from CHUM.","source":"curated","verified":true},{"id":"cur-pharmaprix-decarie","name":"Pharmaprix – Décarie / NDG","category":"pharmacie","region":"montreal","city":"Montréal","address":"5122, chemin de la Côte-des-Neiges, Montréal, QC H3T 1X8","lat":45.4956,"lng":-73.6212,"phone":"514-738-8464","website":"https://www.pharmaprix.ca","features":["step_free","auto_door","wide_aisles","parking"],"desc_fr":"Pharmacie ouverte tard avec portes automatiques, allées dégagées pour fauteuils roulants et stationnement adjacent.","desc_en":"Late-hours pharmacy with automatic doors, wide wheelchair-friendly aisles, and adjacent parking.","source":"curated","verified":true},{"id":"cur-equilibre-mtl","name":"Équilibre – Orthèses et biomécanique (Montréal)","category":"pharmacie","region":"montreal","city":"Montréal","address":"5100, rue Sherbrooke Est, Montréal, QC H1V 3R9","lat":45.5653,"lng":-73.5495,"phone":"514-256-3063","website":"https://equilibre.net","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Clinique d'orthèses plantaires, genouillères et aides à la marche avec entrée sans marche et stationnement accessible.","desc_en":"Orthotics, braces, and walking aids clinic with step-free entry and accessible parking.","source":"curated","verified":true},{"id":"cur-iga-place-dupuis","name":"IGA Extra – Complexe Desjardins","category":"avd","region":"montreal","city":"Montréal","address":"150, rue Sainte-Catherine Ouest, Montréal, QC H2X 3Y2","lat":45.5076,"lng":-73.5644,"phone":"514-849-1231","website":"https://www.iga.net","features":["step_free","auto_door","elevator","wide_aisles","parking","toilet"],"desc_fr":"Épicerie au cœur du Montréal souterrain, allées larges, ascenseurs depuis le stationnement et les rues adjacentes.","desc_en":"Grocery store in the underground city with wide aisles and elevators from parking and street levels.","source":"curated","verified":true},{"id":"cur-metro-marche-central","name":"Marché Adonis – Marché Central","category":"avd","region":"montreal","city":"Montréal","address":"2001, rue Sauvé Ouest, Montréal, QC H4N 3A1","lat":45.5349,"lng":-73.6584,"phone":"514-382-8606","website":"https://www.groupeadonis.ca","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Grande épicerie de plain-pied, nombreuses places de stationnement réservées, portes automatiques et chariots motorisés disponibles.","desc_en":"Large step-free supermarket with ample reserved parking, automatic doors, and motorized shopping carts.","source":"curated","verified":true},{"id":"cur-marche-jean-talon","name":"Marché Jean-Talon","category":"avd","region":"montreal","city":"Montréal","address":"7070, avenue Henri-Julien, Montréal, QC H2S 3S3","lat":45.5361,"lng":-73.6149,"phone":"514-937-7754","website":"https://www.marchespublics-mtl.com","features":["step_free","ramp","toilet","parking","elevator","wide_aisles"],"desc_fr":"Marché public certifié Kéroul partiellement/totalement accessible selon les allées, ascenseur vers le stationnement souterrain et toilettes adaptées.","desc_en":"Public market with elevator to underground parking, accessible restrooms, and wide paved outdoor aisles.","source":"curated","verified":true},{"id":"cur-marche-atwater","name":"Marché Atwater","category":"avd","region":"montreal","city":"Montréal","address":"138, avenue Atwater, Montréal, QC H4C 2H6","lat":45.4796,"lng":-73.5768,"phone":"514-937-7754","website":"https://www.marchespublics-mtl.com","features":["step_free","ramp","auto_door","toilet","parking"],"desc_fr":"Accès de plain-pied aux kiosques extérieurs et au rez-de-chaussée du pavillon, rampe d'accès et toilettes adaptées.","desc_en":"Step-free access to outdoor stalls and main hall ground floor, access ramp, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-costco-bridge","name":"Costco Wholesale – Rue Bridge (Montréal)","category":"avd","region":"montreal","city":"Montréal","address":"300, rue Bridge, Montréal, QC H3K 2C3","lat":45.4876,"lng":-73.5546,"phone":"514-931-0516","website":"https://www.costco.ca","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Très larges allées adaptées aux fauteuils motorisés, quadriporteurs gratuits à l'entrée, toilettes spacieuses et stationnement réservé.","desc_en":"Extra-wide aisles suited for power wheelchairs, free store scooters at entrance, spacious accessible restrooms, and reserved parking.","source":"curated","verified":true},{"id":"cur-eaton","name":"Centre Eaton de Montréal & Time Out Market","category":"avd","region":"montreal","city":"Montréal","address":"705, rue Sainte-Catherine Ouest, Montréal, QC H3B 4G5","lat":45.5015,"lng":-73.5707,"phone":"514-288-3708","website":"https://www.centreeatondemontreal.com","features":["step_free","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Centre commercial accessible sur plusieurs niveaux par ascenseurs, portes automatiques et lien direct vers le métro McGill (ascenseur).","desc_en":"Multi-level mall fully served by elevators, automatic doors, and direct indoor access to McGill metro (elevator).","source":"curated","verified":true},{"id":"cur-fairview","name":"CF Fairview Pointe-Claire","category":"avd","region":"montreal","city":"Pointe-Claire","address":"6801, route Transcanadienne, Pointe-Claire, QC H9R 5J2","lat":45.4628,"lng":-73.8313,"phone":"514-695-0321","website":"https://shops.cadillacfairview.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Prêt de fauteuils roulants au service à la clientèle, ascenseurs spacieux, nombreuses places réservées et lien avec le terminus REM Fairview.","desc_en":"Complimentary wheelchairs at guest services, spacious elevators, ample reserved parking, and link to Fairview REM terminus.","source":"curated","verified":true},{"id":"cur-keroul","name":"Kéroul – Tourisme et culture pour personnes à capacité physique restreinte","category":"services","region":"montreal","city":"Montréal","address":"4545, avenue Pierre-De Coubertin, Montréal, QC H1V 0B2","lat":45.5579,"lng":-73.5515,"phone":"514-252-3104","website":"https://www.keroul.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Organisme de référence évaluant l'accessibilité au Québec (carte d'accompagnement loisir, répertoire touristique accessible).","desc_en":"Reference organization certifying accessibility across Quebec (Companion Leisure Card, accessible tourism directory).","source":"curated","verified":true},{"id":"cur-memo-qc","name":"MÉMO-Qc – Moelle épinière et motricité Québec","category":"services","region":"montreal","city":"Montréal","address":"525, rue Dominion, bureau 350, Montréal, QC H3J 2B4","lat":45.4852,"lng":-73.5701,"phone":"514-341-7272","website":"https://moelleepiniere.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Soutien, pair-aidance, intégration sociale et défense des droits des personnes ayant une lésion médullaire ou motrice.","desc_en":"Peer support, community integration, and advocacy for people with spinal cord injuries or motor disabilities.","source":"curated","verified":true},{"id":"cur-altergo","name":"AlterGo – Accessibilité universelle et loisirs adaptés","category":"services","region":"montreal","city":"Montréal","address":"525, rue Dominion, bureau 340, Montréal, QC H3J 2B4","lat":45.4852,"lng":-73.5702,"phone":"514-933-2739","website":"https://www.altergo.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Promotion des sports, loisirs et culture accessibles à Montréal, organisateur du Défi sportif AlterGo.","desc_en":"Promotes accessible sports, recreation, and culture in Montreal; organizer of Défi sportif AlterGo.","source":"curated","verified":true},{"id":"cur-ex-aequo","name":"Ex aequo – Défense des droits des personnes avec déficience motrice","category":"services","region":"montreal","city":"Montréal","address":"3680, rue Jeanne-Mance, bureau 445, Montréal, QC H2X 2K5","lat":45.5121,"lng":-73.5742,"phone":"514-288-3852","website":"https://www.exaequo.net","features":["step_free","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Organisme montréalais soutenant les personnes ayant une déficience motrice (logement adapté, transport, accessibilité).","desc_en":"Montreal advocacy group supporting people with motor disabilities on adapted housing, transit, and accessibility.","source":"curated","verified":true},{"id":"cur-centre-philou","name":"Centre Philou – Répit et stimulation pour enfants polyhandicapés","category":"services","region":"montreal","city":"Montréal","address":"4245, boulevard Décarie, Montréal, QC H4A 3K4","lat":45.482,"lng":-73.6194,"phone":"514-739-4861","website":"https://centrephilou.com","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Centre entièrement adapté avec rails de levage au plafond, salles sensorielles et services de répit spécialisés.","desc_en":"Fully adapted respite center with ceiling track hoists, sensory rooms, and specialized programs.","source":"curated","verified":true},{"id":"cur-clsc-faubourgs","name":"CLSC des Faubourgs (Visitation)","category":"services","region":"montreal","city":"Montréal","address":"1705, rue de la Visitation, Montréal, QC H2L 3C3","lat":45.521,"lng":-73.5567,"phone":"514-527-2361","website":"https://ciusss-centresudmtl.gouv.qc.ca","features":["step_free","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Services de soutien à domicile (SAD), ergothérapie communautaire et soins infirmiers dans un bâtiment accessible.","desc_en":"Home support services, community occupational therapy, and nursing care in an accessible building.","source":"curated","verified":true},{"id":"cur-coiffure-tete-mtl","name":"Salon de coiffure accessible – Complexe Desjardins (Salon Panache)","category":"services","region":"montreal","city":"Montréal","address":"150, rue Sainte-Catherine Ouest, Montréal, QC H2X 3Y2","lat":45.5078,"lng":-73.564,"phone":"514-844-5525","website":"https://www.complexedesjardins.com","features":["step_free","auto_door","elevator","wide_aisles","toilet"],"desc_fr":"Salon de plain-pied à l'intérieur du Complexe Desjardins permettant une coupe directement en fauteuil roulant, accès facile en transport adapté.","desc_en":"Step-free salon inside Complexe Desjardins accommodating haircuts directly in a wheelchair, easy paratransit access.","source":"curated","verified":true},{"id":"cur-resto-le-central","name":"Le Central – Halle gastronomique (Quartier des spectacles)","category":"resto","region":"montreal","city":"Montréal","address":"30, rue Sainte-Catherine Ouest, Montréal, QC H2X 1Z5","lat":45.5105,"lng":-73.5632,"phone":"514-842-2888","website":"https://lecentral.ca","features":["step_free","auto_door","toilet","wide_aisles"],"desc_fr":"Halle alimentaire de plain-pied avec 25 comptoirs, allées spacieuses, tables accessibles et toilettes adaptées au rez-de-chaussée.","desc_en":"Step-free food hall with 25 vendors, wide aisles, accessible seating, and ground-floor adapted restrooms.","source":"curated","verified":true},{"id":"cur-resto-cathcart","name":"Le Cathcart – Restaurants et Biergarten (Place Ville Marie)","category":"resto","region":"montreal","city":"Montréal","address":"1, Place Ville Marie, Montréal, QC H3B 3Y1","lat":45.5017,"lng":-73.5685,"phone":"514-861-2626","website":"https://www.lecathcart.com","features":["step_free","auto_door","toilet","elevator","wide_aisles","parking"],"desc_fr":"Pavillon vitré lumineux entièrement accessible par ascenseurs depuis la rue et le stationnement, grandes toilettes adaptées.","desc_en":"Bright glass pavilion fully accessible by elevator from street and parking, featuring large adapted restrooms.","source":"curated","verified":true},{"id":"cur-resto-maison-boulud","name":"Maison Boulud (Ritz-Carlton Montréal)","category":"resto","region":"montreal","city":"Montréal","address":"1228, rue Sherbrooke Ouest, Montréal, QC H3G 1H6","lat":45.5005,"lng":-73.5772,"phone":"514-842-4224","website":"https://www.maisonboulud.com","features":["step_free","ramp","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Accès adapté avec personnel attentionné, espace généreux entre les tables et toilettes accessibles.","desc_en":"Accessible entrance with attentive service, generous spacing between tables, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-resto-robin-des-bois","name":"Restaurant Robin des Bois (Parc La Fontaine)","category":"resto","region":"montreal","city":"Montréal","address":"3933, avenue du Parc-La Fontaine, Montréal, QC H2L 0C7","lat":45.5256,"lng":-73.57,"phone":"514-288-1010","website":"https://robindesbois.ca","features":["step_free","ramp","toilet","wide_aisles"],"desc_fr":"Restaurant communautaire chaleureux situé dans le Chalet du Parc La Fontaine avec rampe d'accès et salle de bain adaptée.","desc_en":"Welcoming community restaurant in Parc La Fontaine's chalet with access ramp and adapted restroom.","source":"curated","verified":true},{"id":"cur-resto-momo","name":"Sushi Momo (Saint-Denis)","category":"resto","region":"montreal","city":"Montréal","address":"3609, rue Saint-Denis, Montréal, QC H2X 3L6","lat":45.518,"lng":-73.5698,"phone":"514-825-6363","website":"https://www.sushimomo.ca","features":["step_free","wide_aisles"],"desc_fr":"Restaurant de sushis véganes avec accès au rez-de-chaussée. Recommandé de réserver une table basse accessible à l'avance.","desc_en":"Plant-based sushi restaurant at street level. Advance reservation recommended for accessible lower table.","source":"curated","verified":true},{"id":"cur-resto-cafe-crew","name":"Crew Collective & Café","category":"resto","region":"montreal","city":"Montréal","address":"360, rue Saint-Jacques, Montréal, QC H2Y 1P5","lat":45.5024,"lng":-73.5591,"phone":"514-285-7095","website":"https://crewcollectivecafe.com","features":["ramp","auto_door","toilet","wide_aisles"],"desc_fr":"Café majestueux dans une ancienne banque du Vieux-Montréal, accessible par l'entrée latérale avec rampe/élévateur et grande salle spacieuse.","desc_en":"Grand café in a historic Old Montreal bank, accessible via side ramp/lift entrance with spacious seating.","source":"curated","verified":true},{"id":"cur-resto-modavie","name":"Bistro Modavie (Vieux-Montréal)","category":"resto","region":"montreal","city":"Montréal","address":"1, rue Saint-Paul Ouest, Montréal, QC H2Y 1Y6","lat":45.5035,"lng":-73.554,"phone":"514-287-9582","website":"https://modavie.com","features":["step_free","toilet","wide_aisles"],"desc_fr":"Bistro jazz au rez-de-chaussée de plain-pied dans le Vieux-Montréal, toilettes accessibles au niveau principal.","desc_en":"Ground-level step-free jazz bistro in Old Montreal with accessible restrooms on the main floor.","source":"curated","verified":true},{"id":"cur-biodome","name":"Biodôme de Montréal (Espace pour la vie)","category":"loisirs","region":"montreal","city":"Montréal","address":"4777, avenue Pierre-De Coubertin, Montréal, QC H1V 1B3","lat":45.5597,"lng":-73.5498,"phone":"514-868-3000","website":"https://espacepourlavie.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Certifié Kéroul totalement accessible. Sentiers asphaltés à pente douce dans les 5 écosystèmes, prêt gratuit de fauteuils et accepte la Carte accompagnement loisir (CAL).","desc_en":"Kéroul fully accessible certified. Smooth sloped paths across all 5 ecosystems, free wheelchair loans, honors Companion Leisure Card.","source":"curated","verified":true},{"id":"cur-jardin-botanique","name":"Jardin botanique & Insectarium de Montréal","category":"loisirs","region":"montreal","city":"Montréal","address":"4101, rue Sherbrooke Est, Montréal, QC H1X 2B2","lat":45.5582,"lng":-73.5567,"phone":"514-868-3000","website":"https://espacepourlavie.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Nouvel Insectarium conçu en accessibilité universelle, serres et jardins extérieurs accessibles, navette électrique adaptée sur le site.","desc_en":"Universally accessible Insectarium, accessible greenhouses and gardens, plus adapted electric shuttle on site.","source":"curated","verified":true},{"id":"cur-mbam","name":"Musée des beaux-arts de Montréal (MBAM)","category":"loisirs","region":"montreal","city":"Montréal","address":"1380, rue Sherbrooke Ouest, Montréal, QC H3G 1J5","lat":45.4985,"lng":-73.5794,"phone":"514-285-2000","website":"https://www.mbam.qc.ca","features":["step_free","auto_door","toilet","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Certifié Kéroul totalement accessible : 5 pavillons reliés par tunnels et ascenseurs, prêt de fauteuils/déambulateurs, visites tactiles et trousses sensorielles.","desc_en":"Kéroul fully accessible: 5 pavilions linked by tunnels and elevators, free wheelchair/walker loans, tactile tours, and sensory kits.","source":"curated","verified":true},{"id":"cur-centre-sciences","name":"Centre des sciences de Montréal","category":"loisirs","region":"montreal","city":"Montréal","address":"2, rue de la Commune Ouest, Montréal, QC H2Y 4B2","lat":45.5048,"lng":-73.5499,"phone":"514-496-4724","website":"https://www.centredessciencesdemontreal.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Expositions interactives adaptées, salle de cinéma IMAX avec espaces fauteuils, matinées apaisées et salle de bain universelle avec table à langer adulte.","desc_en":"Adapted interactive exhibits, wheelchair spaces in IMAX theater, sensory-friendly mornings, and universal restroom with adult changing table.","source":"curated","verified":true},{"id":"cur-place-des-arts","name":"Place des Arts & Maison symphonique","category":"loisirs","region":"montreal","city":"Montréal","address":"175, rue Sainte-Catherine Ouest, Montréal, QC H2X 1Z8","lat":45.5082,"lng":-73.5663,"phone":"514-842-2112","website":"https://placedesarts.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Toutes les salles accessibles par ascenseurs, emplacements dédiés fauteuils roulants, système d'aide à l'audition et lien avec le métro Place-des-Arts (ascenseur).","desc_en":"All halls elevator-accessible, dedicated wheelchair seating, assistive listening systems, linked to Place-des-Arts metro (elevator).","source":"curated","verified":true},{"id":"cur-pointe-a-calliere","name":"Pointe-à-Callière – Cité d'archéologie et d'histoire","category":"loisirs","region":"montreal","city":"Montréal","address":"350, place Royale, Montréal, QC H2Y 3Y5","lat":45.5029,"lng":-73.5542,"phone":"514-872-9150","website":"https://pacmusee.qc.ca","features":["step_free","ramp","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Site archéologique souterrain remarquablement accessible par ascenseurs et passerelles, certifié Kéroul.","desc_en":"Underground archaeological site remarkably accessible via elevators and walkways, Kéroul certified.","source":"curated","verified":true},{"id":"cur-mccord","name":"Musée McCord Stewart","category":"loisirs","region":"montreal","city":"Montréal","address":"690, rue Sherbrooke Ouest, Montréal, QC H3A 1E9","lat":45.5042,"lng":-73.5734,"phone":"514-861-6701","website":"https://www.musee-mccord-stewart.ca","features":["step_free","ramp","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Entrée accessible rue Victoria, ascenseurs spacieux, prêt de fauteuils roulants et gratuité pour accompagnateur (CAL).","desc_en":"Accessible entrance on Victoria St., spacious elevators, free wheelchair loans, and free companion admission.","source":"curated","verified":true},{"id":"cur-cineplex-forum","name":"Cinéma Cineplex Forum VIP","category":"loisirs","region":"montreal","city":"Montréal","address":"2313, rue Sainte-Catherine Ouest, Montréal, QC H3H 1N2","lat":45.4896,"lng":-73.5844,"phone":"514-904-1250","website":"https://www.cineplex.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Accès par ascenseurs, emplacements réservés aux fauteuils roulants dans chaque salle et dispositifs de sous-titrage / vidéodescription.","desc_en":"Elevator access, reserved wheelchair seating in all auditoriums, plus closed captioning and descriptive video devices.","source":"curated","verified":true},{"id":"cur-parc-jean-drapeau","name":"Parc Jean-Drapeau (Île Sainte-Hélène & Circuit Gilles-Villeneuve)","category":"parcs","region":"montreal","city":"Montréal","address":"1, circuit Gilles-Villeneuve, Montréal, QC H3C 1A9","lat":45.5143,"lng":-73.5335,"phone":"514-872-6120","website":"https://www.parcjeandrapeau.com","features":["step_free","ramp","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Allées asphaltées très larges, plage Jean-Doré avec tapis d'accès et fauteuil amphibie Mobi-Chair, Complexe aquatique avec mise à l'eau adaptée.","desc_en":"Wide paved paths, Jean-Doré Beach with access mat and Mobi-Chair amphibious wheelchair, aquatic complex with pool lift.","source":"curated","verified":true},{"id":"cur-parc-mont-royal","name":"Parc du Mont-Royal – Pavillon du Lac-aux-Castors & Belvédère Kondiaronk","category":"parcs","region":"montreal","city":"Montréal","address":"2000, chemin Remembrance, Montréal, QC H3H 1X2","lat":45.4988,"lng":-73.5973,"phone":"514-843-8240","website":"https://www.lemontroyal.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Stationnement réservé près de la Maison Smith et du Lac-aux-Castors, sentier large et plat vers le belvédère Kondiaronk, toilettes adaptées.","desc_en":"Reserved parking near Smith House and Beaver Lake, wide flat trail to Kondiaronk Belvedere, adapted restrooms.","source":"curated","verified":true},{"id":"cur-canal-lachine","name":"Lieu historique national du Canal-de-Lachine (Piste multifonctionnelle)","category":"parcs","region":"montreal","city":"Montréal","address":"711, boulevard Saint-Joseph, Lachine, QC H8S 2M2","lat":45.4328,"lng":-73.6694,"phone":"514-283-6054","website":"https://parcs.canada.ca","features":["step_free","toilet","parking","wide_aisles"],"desc_fr":"14,5 km de piste asphaltée plate et continue entre le Vieux-Port et Lachine, idéale pour fauteuils roulants et vélos à main.","desc_en":"14.5 km flat paved pathway from Old Port to Lachine, ideal for wheelchairs and handcycles.","source":"curated","verified":true},{"id":"cur-cap-saint-jacques","name":"Parc-nature du Cap-Saint-Jacques","category":"parcs","region":"montreal","city":"Montréal","address":"20099, boulevard Gouin Ouest, Pierrefonds, QC H9K 1C6","lat":45.4628,"lng":-73.9277,"phone":"514-280-6871","website":"https://montreal.ca","features":["step_free","ramp","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Plage équipée de tapis d'accessibilité et prêt de fauteuil flottant hippocampe/Mobi-Chair en été, chalet d'accueil accessible.","desc_en":"Beach equipped with accessibility mats and floating beach wheelchair loans in summer, accessible welcome chalet.","source":"curated","verified":true},{"id":"cur-parc-la-fontaine","name":"Parc La Fontaine","category":"parcs","region":"montreal","city":"Montréal","address":"3819, avenue Calixa-Lavallée, Montréal, QC H2L 3A7","lat":45.527,"lng":-73.5702,"phone":"311","website":"https://montreal.ca","features":["step_free","ramp","toilet","wide_aisles"],"desc_fr":"Sentiers asphaltés plats autour des étangs, chalet Espace La Fontaine accessible par rampe et toilettes adaptées.","desc_en":"Flat paved paths around the ponds, Espace La Fontaine chalet accessible via ramp with adapted restrooms.","source":"curated","verified":true},{"id":"cur-parc-maisonneuve","name":"Parc Maisonneuve","category":"parcs","region":"montreal","city":"Montréal","address":"4601, rue Sherbrooke Est, Montréal, QC H1X 2B1","lat":45.5625,"lng":-73.5599,"phone":"311","website":"https://montreal.ca","features":["step_free","toilet","parking","wide_aisles"],"desc_fr":"Grand parc plat avec boucle asphaltée accessible toute l'année, stationnement adapté et chalet avec toilettes accessibles.","desc_en":"Large flat park with year-round paved loop, accessible parking, and chalet with adapted restrooms.","source":"curated","verified":true},{"id":"cur-claude-robillard","name":"Complexe sportif Claude-Robillard","category":"sports","region":"montreal","city":"Montréal","address":"1000, avenue Émile-Journault, Montréal, QC H2M 2E7","lat":45.5535,"lng":-73.6355,"phone":"514-872-6900","website":"https://montreal.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Site phare du Défi sportif AlterGo : piscine olympique avec chaise de mise à l'eau, vestiaires universels, piste et gymnases accessibles.","desc_en":"Flagship Défi sportif AlterGo venue: Olympic pool with hydraulic lift, universal locker rooms, accessible track and gyms.","source":"curated","verified":true},{"id":"cur-cepsum","name":"CEPSUM – Centre d'éducation physique et des sports de l'UdeM","category":"sports","region":"montreal","city":"Montréal","address":"2100, boulevard Édouard-Montpetit, Montréal, QC H3T 1J4","lat":45.5094,"lng":-73.6104,"phone":"514-343-6150","website":"https://www.cepsum.umontreal.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Piscine olympique avec système de mise à l'eau, salle d'entraînement accessible, vestiaires adaptés et ascenseurs.","desc_en":"Olympic pool with pool lift, accessible gym floor, adapted locker rooms, and elevators.","source":"curated","verified":true},{"id":"cur-centre-sportif-olympique","name":"Centre sportif du Parc olympique","category":"sports","region":"montreal","city":"Montréal","address":"3200, rue Viau, Montréal, QC H1V 3J3","lat":45.5594,"lng":-73.5517,"phone":"514-252-4141","website":"https://parcolympique.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"7 bassins aquatiques avec lève-personne de mise à l'eau, vestiaire familial universel et accès direct par le métro Viau (ascenseurs).","desc_en":"7 pools with aquatic lift, universal family locker room, and direct access via Viau metro (elevators).","source":"curated","verified":true},{"id":"cur-piscine-saint-laurent","name":"Complexe sportif de Saint-Laurent","category":"sports","region":"montreal","city":"Montréal","address":"2385, boulevard Thimens, Saint-Laurent, QC H4R 1T4","lat":45.5059,"lng":-73.7042,"phone":"514-855-6110","website":"https://montreal.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Bâtiment moderne certifié LEED et accessible : bassin récréatif avec rampe de mise à l'eau progressive, fauteuil aquatique et vestiaires universels.","desc_en":"Modern accessible complex with zero-entry/ramped recreational pool, aquatic wheelchair, and universal locker rooms.","source":"curated","verified":true},{"id":"cur-piscine-rosemont","name":"Piscine Rosemont (Centre communautaire)","category":"sports","region":"montreal","city":"Montréal","address":"6100, 1re Avenue, Montréal, QC H1Y 3A8","lat":45.5512,"lng":-73.5856,"phone":"514-872-1999","website":"https://montreal.ca","features":["step_free","auto_door","toilet","wide_aisles","hoist_lift"],"desc_fr":"Piscine intérieure rénovée avec rampe d'accès au bassin, vestiaire universel et entrée sans marche.","desc_en":"Renovated indoor pool featuring ramped pool entry, universal changing room, and step-free entrance.","source":"curated","verified":true},{"id":"cur-ymca-centre-ville","name":"YMCA Centre-Ville","category":"sports","region":"montreal","city":"Montréal","address":"1440, rue Stanley, Montréal, QC H3A 1P7","lat":45.4997,"lng":-73.5743,"phone":"514-849-8393","website":"https://www.ymcaquebec.org","features":["step_free","auto_door","toilet","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre sportif inclusif doté d'ascenseurs, piscine avec lève-personne, vestiaires adaptés et équipements de musculation accessibles.","desc_en":"Inclusive fitness center with elevators, pool lift, adapted locker rooms, and accessible strength equipment.","source":"curated","verified":true},{"id":"cur-metro-berri","name":"Station de métro Berri-UQAM (Ascenseurs lignes verte, orange, jaune)","category":"transport","region":"montreal","city":"Montréal","address":"505, rue Sainte-Catherine Est, Montréal, QC H2L 2C9","lat":45.5152,"lng":-73.5611,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Nœud principal du métro STM entièrement équipé d'ascenseurs entre la rue et les trois lignes, bandes podotactiles et portillons larges.","desc_en":"Main STM metro hub fully equipped with street-to-platform elevators on all 3 lines, tactile strips, and wide fare gates.","source":"curated","verified":true},{"id":"cur-metro-lionel-groulx","name":"Station de métro Lionel-Groulx (Ascenseurs)","category":"transport","region":"montreal","city":"Montréal","address":"620, avenue Atwater, Montréal, QC H4C 2G9","lat":45.4828,"lng":-73.5795,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Correspondance universellement accessible entre les lignes verte et orange ainsi que la navette 747 (aéroport YUL).","desc_en":"Universally accessible transfer between Green and Orange lines plus 747 YUL Airport shuttle.","source":"curated","verified":true},{"id":"cur-metro-vendome","name":"Pôle intermodal Vendôme (Métro, Train exo, Lien CUSM)","category":"transport","region":"montreal","city":"Montréal","address":"5100, boulevard de Maisonneuve Ouest, Montréal, QC H4A 3R2","lat":45.4739,"lng":-73.6037,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Nouvel édicule universellement accessible avec 5 ascenseurs reliant directement le métro, le train de banlieue et l'hôpital CUSM Glen.","desc_en":"Universally accessible entrance with 5 elevators linking metro, commuter rail, and MUHC Glen hospital.","source":"curated","verified":true},{"id":"cur-gare-centrale-rem","name":"Gare Centrale de Montréal & Station REM","category":"transport","region":"montreal","city":"Montréal","address":"895, rue De La Gauchetière Ouest, Montréal, QC H3B 4G1","lat":45.4998,"lng":-73.5667,"phone":"1-833-736-4636","website":"https://rem.info","features":["step_free","auto_door","toilet","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station REM 100 % accessible (embarquement de plain-pied, portes palières, ascenseurs), trains VIA Rail/exo et lien direct avec métro Bonaventure.","desc_en":"100% accessible REM station (level boarding, platform screen doors, elevators), VIA Rail/exo trains, linked to Bonaventure metro.","source":"curated","verified":true},{"id":"cur-metro-jean-talon","name":"Station de métro Jean-Talon (Ascenseurs lignes orange & bleue)","category":"transport","region":"montreal","city":"Montréal","address":"430, rue Jean-Talon Est, Montréal, QC H2R 1T5","lat":45.539,"lng":-73.6137,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station de correspondance équipée d'ascenseurs desservant les quais des lignes orange et bleue.","desc_en":"Transfer station with elevators serving both Orange and Blue line platforms.","source":"curated","verified":true},{"id":"cur-metro-snowdon","name":"Station de métro Snowdon (Ascenseurs)","category":"transport","region":"montreal","city":"Montréal","address":"5111, chemin Queen-Mary, Montréal, QC H3W 1X4","lat":45.4856,"lng":-73.6279,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station accessible par ascenseurs sur les lignes orange et bleue, proche des hôpitaux de Côte-des-Neiges.","desc_en":"Elevator-accessible station on Orange and Blue lines near Côte-des-Neiges hospitals.","source":"curated","verified":true},{"id":"cur-yul","name":"Aéroport international Montréal-Trudeau (YUL)","category":"transport","region":"montreal","city":"Dorval","address":"975, boulevard Roméo-Vachon Nord, Dorval, QC H4Y 1H1","lat":45.4577,"lng":-73.7499,"phone":"514-394-7377","website":"https://www.admtl.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift","sensory_tactile"],"desc_fr":"Programme Tournesol (handicaps invisibles), débarcadère adapté, accompagnement fauteuil roulant, salles de bain universelles avec table de soins adulte.","desc_en":"Sunflower program (hidden disabilities), adapted drop-off, wheelchair assistance, universal restrooms with adult changing table.","source":"curated","verified":true},{"id":"cur-banq","name":"Grande Bibliothèque – BAnQ","category":"hebergement","region":"montreal","city":"Montréal","address":"475, boulevard De Maisonneuve Est, Montréal, QC H2L 5C4","lat":45.5153,"lng":-73.5624,"phone":"514-873-1100","website":"https://www.banq.qc.ca","features":["step_free","auto_door","toilet","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Entièrement accessible avec lien direct au métro Berri-UQAM, collection de livres adaptés (SQLA), postes ergonomiques et toilettes accessibles à chaque étage.","desc_en":"Fully accessible with direct link to Berri-UQAM metro, adapted books collection, ergonomic workstations, and adapted restrooms on all floors.","source":"curated","verified":true},{"id":"cur-biblio-benny","name":"Bibliothèque Benny & Centre culturel de NDG","category":"hebergement","region":"montreal","city":"Montréal","address":"6400, avenue de Monkland, Montréal, QC H4B 1H3","lat":45.4694,"lng":-73.6317,"phone":"514-872-4147","website":"https://montreal.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Bibliothèque moderne conçue en accessibilité universelle avec ascenseur, allées larges et stationnement adapté.","desc_en":"Modern universally accessible library with elevator, wide aisles, and adapted parking.","source":"curated","verified":true},{"id":"cur-biblio-marc-favreau","name":"Bibliothèque Marc-Favreau (Rosemont)","category":"hebergement","region":"montreal","city":"Montréal","address":"500, boulevard Rosemont, Montréal, QC H2S 0C4","lat":45.5313,"lng":-73.5973,"phone":"514-872-7272","website":"https://montreal.ca","features":["step_free","auto_door","toilet","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Adjacent au métro Rosemont (ascenseur), aménagement lumineux de plain-pied et ascenseur intérieur, zones calmes.","desc_en":"Next to Rosemont metro (elevator), bright step-free layout with indoor elevator and quiet zones.","source":"curated","verified":true},{"id":"cur-biblio-maisonneuve","name":"Bibliothèque Maisonneuve","category":"hebergement","region":"montreal","city":"Montréal","address":"4120, rue Ontario Est, Montréal, QC H1V 1J9","lat":45.5515,"lng":-73.5396,"phone":"514-872-4213","website":"https://montreal.ca","features":["step_free","ramp","auto_door","toilet","elevator","wide_aisles"],"desc_fr":"Récemment agrandie selon les principes d'accessibilité universelle : rampe architecturale, ascenseur vitré et toilettes universelles.","desc_en":"Recently expanded with universal accessibility: architectural ramp, glass elevator, and universal restrooms.","source":"curated","verified":true},{"id":"cur-hotel-fairmont","name":"Fairmont Le Reine Elizabeth","category":"hebergement","region":"montreal","city":"Montréal","address":"900, boulevard René-Lévesque Ouest, Montréal, QC H3B 4A5","lat":45.5003,"lng":-73.5681,"phone":"514-861-3511","website":"https://www.fairmont.fr/queen-elizabeth-montreal","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Certifié Kéroul totalement accessible, chambres adaptées avec douche sans seuil, barres d'appui et piscine avec lève-personne.","desc_en":"Kéroul fully accessible hotel with roll-in shower rooms, grab bars, and pool lift.","source":"curated","verified":true},{"id":"cur-hotel-humaniti","name":"Hôtel Humaniti Montréal","category":"hebergement","region":"montreal","city":"Montréal","address":"340, rue De La Gauchetière Ouest, Montréal, QC H2Z 0B9","lat":45.5041,"lng":-73.5612,"phone":"514-657-2595","website":"https://www.humanitihotel.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Hôtel contemporain certifié accessible, chambres adaptées spacieuses avec douches à l'italienne et accès direct au centre-ville.","desc_en":"Modern accessible hotel with spacious adapted rooms, roll-in showers, and downtown step-free access.","source":"curated","verified":true},{"id":"cur-charles-lemoyne","name":"Hôpital Charles-Le Moyne","category":"soins","region":"rive-sud","city":"Greenfield Park","address":"3120, boulevard Taschereau, Greenfield Park, QC J4V 2H1","lat":45.4981,"lng":-73.4851,"phone":"450-466-5000","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre hospitalier régional de la Montérégie-Centre avec débarcadère adapté, stationnement réservé et cliniques accessibles par ascenseurs.","desc_en":"Regional Montérégie-Centre hospital with adapted drop-off, reserved parking, and elevator-accessible clinics.","source":"curated","verified":true},{"id":"cur-pierre-boucher","name":"Hôpital Pierre-Boucher","category":"soins","region":"rive-sud","city":"Longueuil","address":"1333, boulevard Jacques-Cartier Est, Longueuil, QC J4M 2A5","lat":45.5378,"lng":-73.4619,"phone":"450-468-8111","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Entrée de plain-pied avec portes automatiques, fauteuils roulants à l'accueil, stationnement adapté et toilettes accessibles.","desc_en":"Step-free entry with automatic doors, wheelchairs at reception, accessible parking, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-anna-laberge","name":"Hôpital Anna-Laberge","category":"soins","region":"rive-sud","city":"Châteauguay","address":"200, boulevard Brisebois, Châteauguay, QC J6K 4W8","lat":45.3586,"lng":-73.7191,"phone":"450-699-2425","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Hôpital de la Montérégie-Ouest offrant un débarcadère couvert adapté, stationnement réservé près de l'entrée et cliniques accessibles.","desc_en":"Montérégie-Ouest hospital featuring covered adapted drop-off, close reserved parking, and accessible clinics.","source":"curated","verified":true},{"id":"cur-cmr-saint-hubert","name":"Institut Nazareth et Louis-Braille (INLB) – Longueuil","category":"soins","region":"rive-sud","city":"Longueuil","address":"1111, rue Saint-Charles Ouest, Longueuil, QC J4K 5G4","lat":45.5249,"lng":-73.5194,"phone":"450-463-1710","website":"https://www.inlb.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Centre de réadaptation en déficience visuelle exemplaire en accessibilité universelle : repères podotactiles, signalisation braille et ascenseurs vocaux.","desc_en":"Model visual-impairment rehabilitation center with tactile paving, Braille signage, and talking elevators.","source":"curated","verified":true},{"id":"cur-readapt-monteregie","name":"Centre de réadaptation en déficience physique – Saint-Hubert (CISSSMC)","category":"soins","region":"rive-sud","city":"Saint-Hubert","address":"5300, chemin de Chambly, Saint-Hubert, QC J3Y 3N7","lat":45.4922,"lng":-73.4184,"phone":"450-676-7447","website":"https://www.santemonteregie.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Services spécialisés de réadaptation physique, évaluation fauteuils roulants et aides techniques sur la Rive-Sud.","desc_en":"Specialized physical rehab, wheelchair seating clinics, and technical aids on the South Shore.","source":"curated","verified":true},{"id":"cur-gmf-brossard-dix30","name":"Clinique médicale Quartier DIX30 (GMF)","category":"soins","region":"rive-sud","city":"Brossard","address":"9160, boulevard Leduc, Brossard, QC J4Y 0E3","lat":45.4426,"lng":-73.4393,"phone":"450-445-3030","website":"https://www.quartierdix30.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Complexe médical récent avec stationnement souterrain adapté, ascenseurs spacieux, portes automatiques et salles d'examen accessibles.","desc_en":"Modern medical complex with accessible underground parking, spacious elevators, automatic doors, and accessible exam rooms.","source":"curated","verified":true},{"id":"cur-clinique-boucherville","name":"Complexe médical de Boucherville (GMF)","category":"soins","region":"rive-sud","city":"Boucherville","address":"524, rue de la Rivière-aux-Pins, Boucherville, QC J4B 2Z7","lat":45.5956,"lng":-73.4508,"phone":"450-655-4220","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Clinique pluridisciplinaire (médecine familiale, optométrie, physiothérapie) de plain-pied avec stationnement réservé.","desc_en":"Multidisciplinary clinic (family medicine, optometry, physiotherapy) with step-free access and reserved parking.","source":"curated","verified":true},{"id":"cur-optometrie-brossard","name":"Clinique d'optométrie Iris – Brossard (Taschereau)","category":"soins","region":"rive-sud","city":"Brossard","address":"7415, boulevard Taschereau, Brossard, QC J4Y 1A2","lat":45.4561,"lng":-73.4678,"phone":"450-656-4747","website":"https://iris.ca","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Clinique d'optométrie au rez-de-chaussée sans marche avec stationnement adapté directement devant l'entrée.","desc_en":"Step-free ground-floor optometry clinic with accessible parking directly in front.","source":"curated","verified":true},{"id":"cur-medicus-rivesud","name":"Médicus Rive-Sud – Greenfield Park (Aides à la mobilité)","category":"pharmacie","region":"rive-sud","city":"Greenfield Park","address":"3224, boulevard Taschereau, Greenfield Park, QC J4V 2H3","lat":45.497,"lng":-73.484,"phone":"450-672-4555","website":"https://medicus.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Juste en face de l'Hôpital Charles-Le Moyne : orthèses, prothèses, fauteuils roulants et équipements d'adaptation du domicile.","desc_en":"Across from Charles-Le Moyne Hospital: orthotics, prosthetics, wheelchairs, and home adaptation equipment.","source":"curated","verified":true},{"id":"cur-motion-longueuil","name":"Motion – Aides techniques et mobilité (Longueuil)","category":"pharmacie","region":"rive-sud","city":"Longueuil","address":"2525, boulevard Fernand-Lafontaine, Longueuil, QC J4N 1N7","lat":45.5529,"lng":-73.4573,"phone":"450-646-7000","website":"https://motioncares.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Atelier et salle de montre pour fauteuils motorisés/manuels, marchettes, lève-personnes et entretien sur la Rive-Sud.","desc_en":"Showroom and service center for manual/power wheelchairs, walkers, lifts, and repairs on the South Shore.","source":"curated","verified":true},{"id":"cur-jc-brossard-rome","name":"Pharmacie Jean Coutu – Boulevard de Rome (Brossard)","category":"pharmacie","region":"rive-sud","city":"Brossard","address":"7005, boulevard de Rome, Brossard, QC J4Y 0B6","lat":45.4484,"lng":-73.4508,"phone":"450-443-1212","website":"https://www.jeancoutu.com","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Grande pharmacie moderne de plain-pied avec stationnement réservé, portes automatiques et comptoir orthopédique.","desc_en":"Large modern step-free pharmacy with reserved parking, automatic doors, and orthopedic counter.","source":"curated","verified":true},{"id":"cur-dix30","name":"Quartier DIX30 (Commerces, Épicerie Avril & Restaurants)","category":"avd","region":"rive-sud","city":"Brossard","address":"6000, boulevard de Rome, Brossard, QC J4Y 0B6","lat":45.4436,"lng":-73.4419,"phone":"450-926-1030","website":"https://www.quartierdix30.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Trottoirs larges avec bateaux de trottoir, stationnements souterrains avec ascenseurs, épicerie Avril et commerces accessibles reliés au REM.","desc_en":"Wide sidewalks with curb cuts, underground parking with elevators, Avril supermarket, and accessible shops linked to the REM.","source":"curated","verified":true},{"id":"cur-mail-champlain","name":"Mail Champlain","category":"avd","region":"rive-sud","city":"Brossard","address":"2151, boulevard Lapinière, Brossard, QC J4W 2T5","lat":45.472,"lng":-73.4694,"phone":"450-465-6245","website":"https://www.mailchamplain.ca","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Centre commercial entièrement sur un seul niveau (plain-pied), prêt de fauteuils roulants, allées très larges et toilettes familiales adaptées.","desc_en":"Single-level step-free shopping mall with complimentary wheelchair loans, wide concourses, and adapted family restrooms.","source":"curated","verified":true},{"id":"cur-promenades-st-bruno","name":"CF Promenades Saint-Bruno","category":"avd","region":"rive-sud","city":"Saint-Bruno-de-Montarville","address":"1, boulevard des Promenades, Saint-Bruno-de-Montarville, QC J3V 5J5","lat":45.5023,"lng":-73.3776,"phone":"450-653-1581","website":"https://shops.cadillacfairview.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Épicerie Avril, commerces AVD, ascenseurs spacieux, fauteuils de prêt au service à la clientèle et nombreuses places réservées.","desc_en":"Avril grocery, daily shops, spacious elevators, complimentary wheelchairs at guest services, and ample reserved parking.","source":"curated","verified":true},{"id":"cur-iga-brossard","name":"IGA Extra – Famille Duchemin (Brossard)","category":"avd","region":"rive-sud","city":"Brossard","address":"8200, boulevard Taschereau, Brossard, QC J4X 1C2","lat":45.4487,"lng":-73.4741,"phone":"450-465-5505","website":"https://www.iga.net","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Épicerie moderne de plain-pied avec paniers motorisés disponibles, allées larges et caisses accessibles.","desc_en":"Modern step-free grocery store with motorized shopping carts, wide aisles, and accessible checkout lanes.","source":"curated","verified":true},{"id":"cur-costco-brossard","name":"Costco Wholesale – Brossard","category":"avd","region":"rive-sud","city":"Brossard","address":"9430, boulevard Taschereau, Brossard, QC J4X 2W2","lat":45.4366,"lng":-73.4852,"phone":"450-466-9255","website":"https://www.costco.ca","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Grandes allées dégagées, quadriporteurs gratuits à l'accueil, stationnement réservé vaste et toilettes accessibles.","desc_en":"Wide open aisles, free store scooters at the door, generous reserved parking, and accessible restrooms.","source":"curated","verified":true},{"id":"cur-kim-phat-brossard","name":"Supermarché C&T / Kim Phat – Brossard","category":"avd","region":"rive-sud","city":"Brossard","address":"7209, boulevard Taschereau, Brossard, QC J4Y 1A1","lat":45.4581,"lng":-73.4659,"phone":"450-678-8886","website":"https://www.kimphat.com","features":["step_free","auto_door","parking","wide_aisles"],"desc_fr":"Épicerie asiatique de plain-pied avec portes automatiques, allées accessibles et stationnement réservé devant l'entrée.","desc_en":"Step-free Asian supermarket with automatic doors, accessible aisles, and front reserved parking.","source":"curated","verified":true},{"id":"cur-clsc-samuel-champlain","name":"CLSC Samuel-de-Champlain (Brossard)","category":"services","region":"rive-sud","city":"Brossard","address":"5811, boulevard Taschereau, Brossard, QC J4Z 1A5","lat":45.475,"lng":-73.4651,"phone":"450-445-4452","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Soutien à domicile, prêt d'équipements, soins infirmiers et ergothérapie avec accès universel et stationnement adapté.","desc_en":"Home support, equipment loans, nursing, and OT services with universal access and adapted parking.","source":"curated","verified":true},{"id":"cur-clsc-simonne-monet","name":"CLSC Simonne-Monet-Chartrand (Longueuil)","category":"services","region":"rive-sud","city":"Longueuil","address":"1255, rue Beauregard, Longueuil, QC J4K 2M3","lat":45.5245,"lng":-73.5036,"phone":"450-463-2850","website":"https://www.santemonteregie.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"CLSC accessible avec débarcadère adapté, portes automatiques, ascenseurs et toilettes adaptées.","desc_en":"Accessible CLSC with adapted drop-off, automatic doors, elevators, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-handi-rive-sud","name":"Association des personnes handicapées de la Rive-Sud Ouest (APHRSO)","category":"services","region":"rive-sud","city":"La Prairie","address":"500, rue Saint-Laurent, La Prairie, QC J5R 5X2","lat":45.4192,"lng":-73.4956,"phone":"450-659-6519","website":"https://www.aphrso.org","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Activités adaptées, soutien aux proches aidants et défense des droits sur la Rive-Sud.","desc_en":"Adapted activities, caregiver support, and disability advocacy on the South Shore.","source":"curated","verified":true},{"id":"cur-resto-l-avenue-dix30","name":"Restaurant L'Avenue – Quartier DIX30","category":"resto","region":"rive-sud","city":"Brossard","address":"9190, boulevard Leduc, Brossard, QC J4Y 0L1","lat":45.442,"lng":-73.4382,"phone":"450-890-3330","website":"https://restaurantlavenue.ca","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Restaurant déjeuner/brunch de plain-pied, espace généreux entre les tables et toilettes accessibles.","desc_en":"Step-free brunch restaurant with generous table spacing and accessible restrooms.","source":"curated","verified":true},{"id":"cur-resto-jack-astors-dix30","name":"Bier Markt / Restaurants Square DIX30","category":"resto","region":"rive-sud","city":"Brossard","address":"9360, boulevard Leduc, Brossard, QC J4Y 0B3","lat":45.4408,"lng":-73.4366,"phone":"450-443-8222","website":"https://www.quartierdix30.com","features":["step_free","toilet","parking","wide_aisles"],"desc_fr":"Terrasse et salle à manger de plain-pied accessibles en fauteuil roulant, toilettes adaptées et stationnement réservé à proximité.","desc_en":"Step-free patio and dining room with wheelchair-accessible restrooms and nearby reserved parking.","source":"curated","verified":true},{"id":"cur-resto-messina-longueuil","name":"Bistro St-Charles / Place Longueuil","category":"resto","region":"rive-sud","city":"Longueuil","address":"825, rue Saint-Laurent Ouest, Longueuil, QC J4K 2V1","lat":45.524,"lng":-73.5162,"phone":"450-677-8961","website":"https://placelongueuil.com","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Aire de restauration et cafés entièrement de plain-pied à quelques pas du métro Longueuil, portes automatiques et toilettes adaptées.","desc_en":"Step-free dining options near Longueuil metro with automatic doors and adapted restrooms.","source":"curated","verified":true},{"id":"cur-etoile-dix30","name":"Théâtre Manuvie (L'Étoile Banque Nationale – DIX30)","category":"loisirs","region":"rive-sud","city":"Brossard","address":"6000, boulevard de Rome, Brossard, QC J4Y 0B6","lat":45.4443,"lng":-73.4426,"phone":"450-676-1030","website":"https://www.theatremanuvie.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Salle de spectacles moderne certifiée accessible avec sièges dédiés pour fauteuils roulants et accompagnateurs, ascenseur depuis le stationnement.","desc_en":"Modern accessible theater with dedicated wheelchair and companion seating plus elevator from parking.","source":"curated","verified":true},{"id":"cur-exporail","name":"Exporail – Musée ferroviaire canadien","category":"loisirs","region":"rive-sud","city":"Saint-Constant","address":"110, rue Saint-Pierre, Saint-Constant, QC J5A 1G7","lat":45.377,"lng":-73.5621,"phone":"450-632-2410","website":"https://exporail.org","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Grand pavillon Angus de plain-pied certifié Kéroul, prêt de fauteuils roulants, allées très larges et accepte la CAL.","desc_en":"Kéroul-certified step-free Angus Pavilion, wheelchair loans, extra-wide aisles, honors Companion Leisure Card.","source":"curated","verified":true},{"id":"cur-theatre-ville-longueuil","name":"Théâtre de la Ville (Longueuil)","category":"loisirs","region":"rive-sud","city":"Longueuil","address":"180, rue De Gentilly Est, Longueuil, QC J4H 4A9","lat":45.5335,"lng":-73.4937,"phone":"450-670-1616","website":"https://www.theatredelaville.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Salles Pratt & Whitney et Jean-Louis-Millette accessibles en fauteuil roulant, stationnement réservé gratuit à la porte.","desc_en":"Wheelchair-accessible performance halls with reserved parking directly at the entrance.","source":"curated","verified":true},{"id":"cur-parc-st-bruno","name":"Parc national du Mont-Saint-Bruno (Sépaq)","category":"parcs","region":"rive-sud","city":"Saint-Bruno-de-Montarville","address":"330, rang des Vingt-Cinq Est, Saint-Bruno-de-Montarville, QC J3V 4P6","lat":45.5453,"lng":-73.3292,"phone":"450-653-7544","website":"https://www.sepaq.com","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Centre de découverte accessible, prêt de fauteuil tout-terrain (Joëlette/Trackz selon saison), sentier du Lac-Seigneurial carrossable.","desc_en":"Accessible discovery center, all-terrain adaptive chair loans (seasonal), and smooth Lac-Seigneurial trail.","source":"curated","verified":true},{"id":"cur-parc-iles-boucherville","name":"Parc national des Îles-de-Boucherville (Sépaq)","category":"parcs","region":"rive-sud","city":"Boucherville","address":"55, île Sainte-Marguerite, Boucherville, QC J4B 5J6","lat":45.5956,"lng":-73.4792,"phone":"450-928-5088","website":"https://www.sepaq.com","features":["step_free","ramp","toilet","parking","wide_aisles"],"desc_fr":"Sentiers très plats en poussière de roche compactée et asphalte, centre de découverte accessible et stationnement réservé.","desc_en":"Very flat compacted gravel and paved trails, accessible discovery center, and reserved parking.","source":"curated","verified":true},{"id":"cur-parc-michel-chartrand","name":"Parc Michel-Chartrand (Longueuil)","category":"parcs","region":"rive-sud","city":"Longueuil","address":"1895, rue Adoncour, Longueuil, QC J4N 1P1","lat":45.5656,"lng":-73.4651,"phone":"450-463-7100","website":"https://www.longueuil.quebec","features":["step_free","toilet","parking","wide_aisles"],"desc_fr":"Parc urbain avec sentiers asphaltés plats, pavillon d'accueil accessible, toilettes adaptées et observation des cerfs.","desc_en":"Urban park with flat paved loops, accessible welcome pavilion, adapted restrooms, and deer spotting.","source":"curated","verified":true},{"id":"cur-parc-recreoparc","name":"RécréoParc (Sainte-Catherine)","category":"parcs","region":"rive-sud","city":"Sainte-Catherine","address":"5340, boulevard Marie-Victorin, Sainte-Catherine, QC J5C 1L9","lat":45.409,"lng":-73.5752,"phone":"450-635-3011","website":"https://recreoparc.org","features":["step_free","ramp","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Piste asphaltée le long du fleuve, plage équipée d'un tapis d'accès et fauteuil amphibie Mobi-Chair en saison estivale.","desc_en":"Riverside paved path, beach with access mat and Mobi-Chair amphibious wheelchair in summer.","source":"curated","verified":true},{"id":"cur-aquatique-brossard","name":"Complexe aquatique de Brossard","category":"sports","region":"rive-sud","city":"Brossard","address":"8350, avenue San Francisco, Brossard, QC J4X 2N9","lat":45.4518,"lng":-73.4803,"phone":"450-923-6311","website":"https://www.brossard.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Complexe aquatique récent exemplaire : entrée progressive sans marche dans le bassin récréatif, lève-personne hydraulique, vestiaire universel avec table à langer adulte.","desc_en":"Exemplary modern aquatic complex: zero-entry recreational pool, hydraulic pool lift, universal locker room with adult changing table.","source":"curated","verified":true},{"id":"cur-aquatique-beloeil","name":"Centre aquatique de Beloeil","category":"sports","region":"rive-sud","city":"Beloeil","address":"380, rue Lévis, Beloeil, QC J3G 0G6","lat":45.5734,"lng":-73.2089,"phone":"450-467-2835","website":"https://beloeil.ca","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Rampe de mise à l'eau, lève-personne hydraulique, fauteuils aquatiques et vestiaires universels adaptés.","desc_en":"Ramped pool entry, hydraulic lift, aquatic wheelchairs, and universal adapted locker rooms.","source":"curated","verified":true},{"id":"cur-sportplex-boucherville","name":"Centre multifonctionnel Francine-Gadbois (Boucherville)","category":"sports","region":"rive-sud","city":"Boucherville","address":"1075, rue Lionel-Daunais, Boucherville, QC J4B 8N5","lat":45.5902,"lng":-73.4437,"phone":"450-449-2800","website":"https://www.boucherville.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Centre communautaire et sportif accessible avec stationnement réservé, ascenseur et toilettes adaptées.","desc_en":"Accessible community and sports complex with reserved parking, elevator, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-rem-brossard","name":"Station REM Brossard (Terminus Rive-Sud)","category":"transport","region":"rive-sud","city":"Brossard","address":"8900, boulevard de Rome, Brossard, QC J4Y 0N2","lat":45.4328,"lng":-73.4317,"phone":"1-833-736-4636","website":"https://rem.info","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station 100 % universellement accessible : embarquement de plain-pied sans espace, ascenseurs, stationnement incitatif réservé et terminus RTL.","desc_en":"100% universally accessible REM terminus: level boarding, elevators, reserved park-and-ride spots, and RTL bus terminal.","source":"curated","verified":true},{"id":"cur-rem-dix30","name":"Station REM Du Quartier (DIX30)","category":"transport","region":"rive-sud","city":"Brossard","address":"6050, boulevard de Rome, Brossard, QC J4Y 0B6","lat":45.4454,"lng":-73.4384,"phone":"1-833-736-4636","website":"https://rem.info","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Passerelle vitrée accessible reliant directement le REM au Quartier DIX30, ascenseurs et embarquement de plain-pied.","desc_en":"Accessible glass skybridge linking the REM directly to Quartier DIX30, with elevators and level boarding.","source":"curated","verified":true},{"id":"cur-rem-panama","name":"Station REM Panama & Terminus RTL","category":"transport","region":"rive-sud","city":"Brossard","address":"7050, avenue Panama, Brossard, QC J4W 2S9","lat":45.466,"lng":-73.4704,"phone":"1-833-736-4636","website":"https://rem.info","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Pôle intermodal moderne entièrement accessible avec quais chauffés, ascenseurs, toilettes adaptées et accès direct au Mail Champlain.","desc_en":"Modern fully accessible transit hub with heated platforms, elevators, adapted restrooms, and direct access to Mail Champlain.","source":"curated","verified":true},{"id":"cur-biblio-brossard","name":"Bibliothèque de Brossard Georgette-Lepage","category":"hebergement","region":"rive-sud","city":"Brossard","address":"7855, avenue San Francisco, Brossard, QC J4X 2A4","lat":45.4557,"lng":-73.4776,"phone":"450-923-6350","website":"https://www.brossard.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Bibliothèque très spacieuse avec portes automatiques, ascenseurs, places réservées et zones calmes accessibles.","desc_en":"Spacious library with automatic doors, elevators, reserved parking, and accessible quiet study zones.","source":"curated","verified":true},{"id":"cur-hotel-alt-dix30","name":"Hôtel Alt Quartier DIX30","category":"hebergement","region":"rive-sud","city":"Brossard","address":"6500, boulevard de Rome, Brossard, QC J4Y 0B6","lat":45.4446,"lng":-73.4438,"phone":"450-443-1030","website":"https://www.germainhotels.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Hôtel certifié Kéroul avec chambres adaptées (douches sans seuil), ascenseurs et stationnement souterrain accessible.","desc_en":"Kéroul-certified hotel offering roll-in shower rooms, elevators, and accessible underground parking.","source":"curated","verified":true},{"id":"cur-hjr-laval","name":"Hôpital juif de réadaptation (HJR – CISSS de Laval)","category":"soins","region":"rive-nord","city":"Laval","address":"3205, place Alton-Goldbloom, Laval, QC H7V 1R2","lat":45.5539,"lng":-73.7484,"phone":"450-688-9550","website":"https://www.lavalensante.com","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre majeur de réadaptation physique et neurologique (Laval/Rive-Nord). Entièrement accessible avec piscine thérapeutique adaptée et débarcadère couvert.","desc_en":"Major physical and neurological rehabilitation hospital for Laval/North Shore. Fully accessible with adapted therapy pool and covered drop-off.","source":"curated","verified":true},{"id":"cur-cite-sante-laval","name":"Hôpital de la Cité-de-la-Santé (Laval)","category":"soins","region":"rive-nord","city":"Laval","address":"1755, boulevard René-Laennec, Laval, QC H7M 3L9","lat":45.592,"lng":-73.7116,"phone":"450-668-1010","website":"https://www.lavalensante.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre hospitalier principal de Laval avec débarcadère transport adapté, stationnement réservé, portes automatiques et ascenseurs.","desc_en":"Laval's main hospital with paratransit drop-off, reserved parking, automatic doors, and accessible elevators.","source":"curated","verified":true},{"id":"cur-st-eustache-hosp","name":"Hôpital de Saint-Eustache","category":"soins","region":"rive-nord","city":"Saint-Eustache","address":"520, boulevard Arthur-Sauvé, Saint-Eustache, QC J7R 5B1","lat":45.5656,"lng":-73.9041,"phone":"450-473-6811","website":"https://www.santelaurentides.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Hôpital régional des Basses-Laurentides avec accès de plain-pied, stationnement réservé et cliniques externes accessibles.","desc_en":"Lower Laurentians regional hospital with step-free entry, reserved parking, and accessible outpatient clinics.","source":"curated","verified":true},{"id":"cur-le-gardeur","name":"Hôpital Pierre-Le Gardeur (Terrebonne)","category":"soins","region":"rive-nord","city":"Terrebonne","address":"911, montée des Pionniers, Terrebonne, QC J6V 2H2","lat":45.7145,"lng":-73.5048,"phone":"450-654-7525","website":"https://www.cisss-lanaudiere.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Hôpital moderne entièrement accessible avec débarcadère couvert, larges corridors et toilettes adaptées sur tous les étages.","desc_en":"Modern fully accessible hospital with covered drop-off, wide corridors, and adapted restrooms on every floor.","source":"curated","verified":true},{"id":"cur-st-jerome-hosp","name":"Hôpital régional de Saint-Jérôme","category":"soins","region":"rive-nord","city":"Saint-Jérôme","address":"290, rue De Montigny, Saint-Jérôme, QC J7Z 5T3","lat":45.7779,"lng":-74.0007,"phone":"450-432-2777","website":"https://www.santelaurentides.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Entrée principale adaptée, ascenseurs vers les cliniques spécialisées et stationnement réservé.","desc_en":"Adapted main entrance, elevators to specialist clinics, and reserved parking.","source":"curated","verified":true},{"id":"cur-polyclinique-concorde","name":"Polyclinique médicale Concorde (GMF – Laval)","category":"soins","region":"rive-nord","city":"Laval","address":"300, boulevard de la Concorde Est, Laval, QC H7G 2E6","lat":45.5739,"lng":-73.686,"phone":"450-663-6640","website":"https://www.polycliniqueconcorde.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Clinique médicale multidisciplinaire (médecine familiale, spécialistes, prélèvements) avec ascenseur et stationnement adapté.","desc_en":"Multidisciplinary clinic (family medicine, specialists, blood tests) with elevator and adapted parking.","source":"curated","verified":true},{"id":"cur-gmf-boisbriand","name":"Clinique médicale Faubourg Boisbriand (GMF)","category":"soins","region":"rive-nord","city":"Boisbriand","address":"2750, rue d'Annemasse, Boisbriand, QC J7H 0A1","lat":45.6263,"lng":-73.8453,"phone":"450-434-2626","website":"https://www.santelaurentides.gouv.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"GMF moderne avec accès de plain-pied, portes automatiques et stationnement réservé directement devant la clinique.","desc_en":"Modern GMF clinic with step-free entry, automatic doors, and reserved parking directly in front.","source":"curated","verified":true},{"id":"cur-medicus-laval","name":"Médicus Laval – Orthèses et aides à la mobilité","category":"pharmacie","region":"rive-nord","city":"Laval","address":"3055, boulevard Saint-Martin Ouest, Laval, QC H7T 0J3","lat":45.5608,"lng":-73.7538,"phone":"450-687-7555","website":"https://medicus.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Orthèses, prothèses, fauteuils roulants et équipements d'autonomie avec vaste stationnement adapté près du Centropolis.","desc_en":"Orthotics, prosthetics, wheelchairs, and daily living aids with ample adapted parking near Centropolis.","source":"curated","verified":true},{"id":"cur-motion-laval","name":"Motion – Mobilité et accessibilité (Laval)","category":"pharmacie","region":"rive-nord","city":"Laval","address":"2555, boulevard Daniel-Johnson, Laval, QC H7T 1S8","lat":45.5612,"lng":-73.7495,"phone":"450-688-6555","website":"https://motioncares.ca","features":["step_free","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Vente, location et réparation de fauteuils roulants, coussins anti-escarres et lève-personnes.","desc_en":"Sales, rentals, and repairs of wheelchairs, pressure-relief cushions, and patient lifts.","source":"curated","verified":true},{"id":"cur-jc-terrebonne","name":"Pharmacie Jean Coutu – Boulevard des Seigneurs (Terrebonne)","category":"pharmacie","region":"rive-nord","city":"Terrebonne","address":"1185, boulevard Moody, Terrebonne, QC J6W 3L1","lat":45.7024,"lng":-73.6428,"phone":"450-471-3727","website":"https://www.jeancoutu.com","features":["step_free","auto_door","parking","wide_aisles"],"desc_fr":"Pharmacie de plain-pied avec stationnement réservé, portes automatiques et section aides à la vie quotidienne.","desc_en":"Step-free pharmacy with reserved parking, automatic doors, and daily living aids section.","source":"curated","verified":true},{"id":"cur-carrefour-laval","name":"CF Carrefour Laval","category":"avd","region":"rive-nord","city":"Laval","address":"3003, boulevard le Carrefour, Laval, QC H7T 1C7","lat":45.5701,"lng":-73.7518,"phone":"450-687-1360","website":"https://shops.cadillacfairview.com","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Centre commercial entièrement sur un niveau de plain-pied, prêt de fauteuils roulants et quadriporteurs, toilettes familiales adaptées et très larges allées.","desc_en":"Single-level step-free mall with complimentary wheelchairs and scooters, adapted family restrooms, and extra-wide concourses.","source":"curated","verified":true},{"id":"cur-place-rosemere","name":"Place Rosemère","category":"avd","region":"rive-nord","city":"Rosemère","address":"401, boulevard Labelle, Rosemère, QC J7A 3T2","lat":45.6377,"lng":-73.7966,"phone":"450-437-1161","website":"https://www.placerosemere.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Centre commercial accessible sur 2 étages avec ascenseurs, prêt de fauteuils roulants et stationnement réservé aux entrées principales.","desc_en":"Two-level accessible mall with elevators, wheelchair loans, and reserved parking at main entrances.","source":"curated","verified":true},{"id":"cur-iga-laval-stmartin","name":"IGA Extra – Saint-Martin (Laval)","category":"avd","region":"rive-nord","city":"Laval","address":"3625, boulevard Saint-Martin Ouest, Laval, QC H7T 1A7","lat":45.5572,"lng":-73.7634,"phone":"450-687-3310","website":"https://www.iga.net","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Grande épicerie de plain-pied avec paniers motorisés, allées spacieuses et caisses larges.","desc_en":"Large step-free supermarket with motorized carts, spacious aisles, and wide checkouts.","source":"curated","verified":true},{"id":"cur-costco-boisbriand","name":"Costco Wholesale – Boisbriand","category":"avd","region":"rive-nord","city":"Boisbriand","address":"2955, boulevard de la Grande-Allée, Boisbriand, QC J7H 1M9","lat":45.6226,"lng":-73.8414,"phone":"450-430-6060","website":"https://www.costco.ca","features":["step_free","auto_door","parking","wide_aisles","toilet"],"desc_fr":"Entrepôt entièrement de plain-pied, quadriporteurs gratuits à l'entrée, allées très larges et toilettes accessibles.","desc_en":"Step-free warehouse with free store scooters, extra-wide aisles, and accessible restrooms.","source":"curated","verified":true},{"id":"cur-aphl-laval","name":"Association de paralysie cérébrale / Regroupement organismes handicap Laval","category":"services","region":"rive-nord","city":"Laval","address":"1333, boulevard Chomedey, Laval, QC H7V 3Y1","lat":45.5582,"lng":-73.738,"phone":"450-686-2332","website":"https://www.lavalensante.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Services communautaires, accompagnement et ressources d'intégration pour personnes vivant avec un handicap à Laval.","desc_en":"Community services, support, and integration resources for people living with disabilities in Laval.","source":"curated","verified":true},{"id":"cur-clsc-sainte-rose","name":"CLSC de Sainte-Rose (Laval)","category":"services","region":"rive-nord","city":"Laval","address":"280, boulevard Roi-du-Nord, Laval, QC H7L 4L2","lat":45.6119,"lng":-73.7824,"phone":"450-622-5110","website":"https://www.lavalensante.com","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"CLSC de plain-pied offrant soutien à domicile, ergothérapie et soins courants avec stationnement adapté.","desc_en":"Step-free CLSC offering home support, occupational therapy, and routine care with accessible parking.","source":"curated","verified":true},{"id":"cur-centropolis-restos","name":"Centropolis Laval (Place Centrale & Restaurants)","category":"resto","region":"rive-nord","city":"Laval","address":"1799, avenue Pierre-Péladeau, Laval, QC H7T 2Y5","lat":45.5579,"lng":-73.7488,"phone":"450-681-9999","website":"https://www.centropolis.ca","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Nombreux restaurants et terrasses de plain-pied (Zibo, Carlos & Pepe's, Randolph, etc.) autour de la place piétonne accessible et stationnements réservés.","desc_en":"Numerous step-free restaurants and patios around an accessible pedestrian plaza with reserved parking.","source":"curated","verified":true},{"id":"cur-cosmodome","name":"Cosmodôme de Laval","category":"loisirs","region":"rive-nord","city":"Laval","address":"2150, autoroute des Laurentides, Laval, QC H7T 2T8","lat":45.5625,"lng":-73.7478,"phone":"450-978-3600","website":"https://cosmodome.org","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Musée de l'espace certifié Kéroul totalement accessible : missions virtuelles adaptées, ascenseurs, prêt de fauteuils roulants et accepte la CAL.","desc_en":"Kéroul fully accessible space museum: adapted virtual missions, elevators, wheelchair loans, honors Companion Leisure Card.","source":"curated","verified":true},{"id":"cur-place-bell","name":"Place Bell (Laval)","category":"loisirs","region":"rive-nord","city":"Laval","address":"1950, rue Claude-Gagné, Laval, QC H7N 5H9","lat":45.5559,"lng":-73.7219,"phone":"1-855-634-4472","website":"https://placebell.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Amphithéâtre moderne universellement accessible juste à côté du métro Montmorency (ascenseur), loges et plateformes fauteuils roulants.","desc_en":"Modern universally accessible arena next to Montmorency metro (elevator), featuring dedicated wheelchair platforms.","source":"curated","verified":true},{"id":"cur-salle-andre-mathieu","name":"Salle André-Mathieu (Laval)","category":"loisirs","region":"rive-nord","city":"Laval","address":"475, boulevard de l'Avenir, Laval, QC H7N 5H9","lat":45.5586,"lng":-73.7204,"phone":"450-667-2040","website":"https://www.co-motion.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Salle de spectacle accessible certifiée avec places adaptées, système d'aide à l'audition et accès facile depuis le métro Montmorency.","desc_en":"Accessible performance hall with adapted seating, assistive listening, and easy access from Montmorency metro.","source":"curated","verified":true},{"id":"cur-musee-sante-armand","name":"Musée de la santé Armand-Frappier (Laval)","category":"loisirs","region":"rive-nord","city":"Laval","address":"2150, autoroute des Laurentides, Laval, QC H7T 2T8","lat":45.5621,"lng":-73.7485,"phone":"450-686-5641","website":"https://musee-afrappier.qc.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Nouveau pavillon lumineux conçu selon l'accessibilité universelle : laboratoires avec paillasses basses, ascenseur et toilettes adaptées.","desc_en":"New universally accessible pavilion featuring wheelchair-height lab benches, elevator, and adapted restrooms.","source":"curated","verified":true},{"id":"cur-centre-nature-laval","name":"Centre de la nature de Laval","category":"parcs","region":"rive-nord","city":"Laval","address":"901, avenue du Parc, Laval, QC H7E 2T7","lat":45.6036,"lng":-73.6584,"phone":"450-662-4942","website":"https://www.laval.ca","features":["step_free","ramp","toilet","parking","wide_aisles"],"desc_fr":"Grand parc urbain avec sentiers asphaltés plats, ferme, jardins, chalets accessibles et stationnement réservé.","desc_en":"Large urban park with flat paved trails, farm, gardens, accessible chalets, and reserved parking.","source":"curated","verified":true},{"id":"cur-parc-riviere-mille-iles","name":"Parc de la Rivière-des-Mille-Îles (Centre d'exploration)","category":"parcs","region":"rive-nord","city":"Laval","address":"345, boulevard Sainte-Rose, Laval, QC H7L 1M7","lat":45.6143,"lng":-73.7885,"phone":"450-622-1020","website":"https://www.parc-mille-iles.qc.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Centre d'exploration certifié accessible et quai équipé d'un lève-personne pour embarquement adapté en kayak/canot.","desc_en":"Accessible exploration center plus dock equipped with a transfer lift for adaptive kayaking/canoeing.","source":"curated","verified":true},{"id":"cur-parc-oka","name":"Parc national d'Oka (Sépaq)","category":"parcs","region":"rive-nord","city":"Oka","address":"2020, chemin d'Oka, Oka, QC J0N 1E0","lat":45.4682,"lng":-74.0279,"phone":"450-479-8365","website":"https://www.sepaq.com","features":["step_free","ramp","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Plage accessible avec tapis Mobi-Mat et prêt de fauteuil de plage Hippocampe, passerelle de la Grande-Baie en bois adaptée.","desc_en":"Accessible beach with Mobi-Mat and Hippocampe beach wheelchair loans, plus adapted Grande-Baie boardwalk.","source":"curated","verified":true},{"id":"cur-aquatique-laval","name":"Complexe aquatique de Laval (Cosmodôme / Terry-Fox)","category":"sports","region":"rive-nord","city":"Laval","address":"1990, avenue Terry-Fox, Laval, QC H7T 1C9","lat":45.5656,"lng":-73.7514,"phone":"311","website":"https://www.laval.ca","features":["step_free","ramp","auto_door","toilet","parking","elevator","wide_aisles","hoist_lift"],"desc_fr":"Tout nouveau complexe aquatique conçu en accessibilité universelle : rampes d'accès aux bassins, lève-personnes, vestiaires universels et gradins adaptés.","desc_en":"Brand-new universally accessible aquatic complex with ramped pool entries, aquatic lifts, universal locker rooms, and accessible stands.","source":"curated","verified":true},{"id":"cur-aquatique-st-eustache","name":"Complexe aquatique Saint-Eustache","category":"sports","region":"rive-nord","city":"Saint-Eustache","address":"230, boulevard Arthur-Sauvé, Saint-Eustache, QC J7R 2H9","lat":45.5579,"lng":-73.8966,"phone":"450-974-5111","website":"https://www.saint-eustache.ca","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Bassin récréatif avec mise à l'eau progressive, chaise hydraulique et vestiaires universels adaptés.","desc_en":"Recreational pool with zero-depth entry, hydraulic pool chair, and universal adapted locker rooms.","source":"curated","verified":true},{"id":"cur-aquatique-blainville","name":"Centre récréoaquatique de Blainville","category":"sports","region":"rive-nord","city":"Blainville","address":"995, boulevard Michèle-Bohec, Blainville, QC J7C 5J6","lat":45.6761,"lng":-73.8884,"phone":"450-434-5275","website":"https://blainville.ca","features":["step_free","ramp","auto_door","toilet","parking","wide_aisles","hoist_lift"],"desc_fr":"Mise à l'eau progressive, fauteuils aquatiques de prêt, vestiaires familiaux universels et stationnement adapté.","desc_en":"Zero-entry pool, loaner aquatic wheelchairs, universal family changing rooms, and adapted parking.","source":"curated","verified":true},{"id":"cur-metro-montmorency","name":"Station de métro Montmorency (Laval – Ascenseurs)","category":"transport","region":"rive-nord","city":"Laval","address":"555, boulevard de l'Avenir, Laval, QC H7N 5H9","lat":45.5582,"lng":-73.7215,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station STM 100 % accessible dès sa construction avec ascenseurs, stationnement incitatif réservé et terminus STL/exo.","desc_en":"100% accessible STM station with elevators, reserved park-and-ride spots, and STL/exo bus terminal.","source":"curated","verified":true},{"id":"cur-metro-cartier","name":"Station de métro Cartier (Laval – Ascenseurs)","category":"transport","region":"rive-nord","city":"Laval","address":"25, boulevard Cartier Ouest, Laval, QC H7N 2H2","lat":45.56,"lng":-73.6817,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Station accessible par ascenseurs reliant le terminus d'autobus STL aux quais de la ligne orange.","desc_en":"Elevator-accessible station connecting STL bus terminal to Orange line platforms.","source":"curated","verified":true},{"id":"cur-metro-concorde","name":"Station de métro & Gare exo De la Concorde (Laval)","category":"transport","region":"rive-nord","city":"Laval","address":"1200, avenue Léo-Lacombe, Laval, QC H7N 4B8","lat":45.5608,"lng":-73.7099,"phone":"514-786-4636","website":"https://www.stm.info/fr/accessibilite","features":["step_free","auto_door","elevator","wide_aisles","sensory_tactile"],"desc_fr":"Correspondance accessible par ascenseurs entre le métro de Montréal et le train de banlieue Saint-Jérôme (exo).","desc_en":"Elevator-accessible transfer between Montreal metro and Saint-Jérôme commuter rail (exo).","source":"curated","verified":true},{"id":"cur-biblio-multiculturelle-laval","name":"Bibliothèque Multiculturelle de Laval","category":"hebergement","region":"rive-nord","city":"Laval","address":"1535, boulevard Chomedey, Laval, QC H7V 3Z4","lat":45.5568,"lng":-73.7393,"phone":"450-978-5995","website":"https://biblio.laval.ca","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Bibliothèque centrale de Laval accessible avec collections en plusieurs langues (arabe, mandarin, espagnol, etc.), ascenseur et stationnement réservé.","desc_en":"Laval's central accessible library featuring multilingual collections, elevator, and reserved parking.","source":"curated","verified":true},{"id":"cur-biblio-boisbriand","name":"Bibliothèque de Boisbriand","category":"hebergement","region":"rive-nord","city":"Boisbriand","address":"901, rue Grande-Allée, Boisbriand, QC J7G 1W6","lat":45.6114,"lng":-73.8384,"phone":"450-435-7466","website":"https://www.ville.boisbriand.qc.ca","features":["step_free","auto_door","toilet","parking","wide_aisles"],"desc_fr":"Bibliothèque de plain-pied avec portes automatiques, allées larges et stationnement adapté.","desc_en":"Step-free library with automatic doors, wide aisles, and adapted parking.","source":"curated","verified":true},{"id":"cur-hotel-sheraton-laval","name":"Sheraton Laval (Hôtel & Centre de congrès)","category":"hebergement","region":"rive-nord","city":"Laval","address":"2440, autoroute des Laurentides, Laval, QC H7T 1X5","lat":45.5666,"lng":-73.751,"phone":"450-687-2440","website":"https://www.marriott.com","features":["step_free","auto_door","toilet","parking","elevator","wide_aisles"],"desc_fr":"Hôtel accessible en face du Carrefour Laval avec chambres adaptées, portes automatiques, ascenseurs et restaurant de plain-pied.","desc_en":"Accessible hotel across from Carrefour Laval with adapted rooms, automatic doors, elevators, and step-free dining.","source":"curated","verified":true}];
+
+const CATEGORIES = [
+  { id: "soins", color: "#dc2626", icon: "🏥" },
+  { id: "pharmacie", color: "#059669", icon: "💊" },
+  { id: "avd", color: "#d97706", icon: "🛒" },
+  { id: "services", color: "#7c3aed", icon: "🤝" },
+  { id: "resto", color: "#ea580c", icon: "🍽️" },
+  { id: "loisirs", color: "#db2777", icon: "🎭" },
+  { id: "parcs", color: "#16a34a", icon: "🌳" },
+  { id: "sports", color: "#0284c7", icon: "🏊" },
+  { id: "transport", color: "#4f46e5", icon: "🚇" },
+  { id: "hebergement", color: "#0f766e", icon: "📚" }
+];
+
+const FEATURES = [
+  { id: "step_free", icon: "♿" },
+  { id: "ramp", icon: "📐" },
+  { id: "auto_door", icon: "🚪" },
+  { id: "toilet", icon: "🚻" },
+  { id: "parking", icon: "🅿️" },
+  { id: "elevator", icon: "🛗" },
+  { id: "wide_aisles", icon: "↔️" },
+  { id: "hoist_lift", icon: "🛟" },
+  { id: "sensory_tactile", icon: "🔊" }
+];
+
+const I18N = {
+  fr: {
+    subtitle: "Montréal • Rive-Sud • Rive-Nord",
+    theme_light: "Clair", theme_dark: "Sombre", theme_contrast: "Contraste",
+    favorites: "Favoris", print_sheet: "Fiche patient", share: "Partager", suggest: "Suggérer",
+    search_ph: "Lieu, adresse ou code postal (ex. H2X, J4Y, H7T)...",
+    my_location: "Ma position", any_distance: "Toute distance", all_regions: "Tout le Grand Montréal",
+    verified_only: "Vérifiés", categories_label: "Catégories", accessibility_label: "Critères d'accessibilité",
+    reset: "Réinitialiser", recenter: "Recentrer", list_view: "Liste", map_view: "Carte",
+    places_found: "lieux trouvés", verified_badge: "Vérifié", osm_badge: "OpenStreetMap",
+    directions: "Itinéraire", website_lbl: "Site web", load_more: "Afficher plus de lieux",
+    no_results: "Aucun lieu ne correspond à ces filtres. Essayez d'élargir le rayon ou de réinitialiser les critères.",
+    suggest_title: "Suggérer un lieu accessible", place_name: "Nom de l'établissement *",
+    category: "Catégorie", region: "Secteur", address: "Adresse complète *", phone: "Téléphone",
+    website: "Site web", description: "Description utile pour les patients", save_local: "Ajouter à ma carte",
+    cats: {
+      soins: "Soins & Cliniques", pharmacie: "Pharmacies & Aides tech.", avd: "AVD & Épiceries",
+      services: "Services & Organismes", resto: "Restaurants & Cafés", loisirs: "Culture & Loisirs",
+      parcs: "Parcs & Plein air", sports: "Sports & Piscines", transport: "Transport & Accès",
+      hebergement: "Hôtels & Bibliothèques"
+    },
+    feats: {
+      step_free: "Plain-pied", ramp: "Rampe d'accès", auto_door: "Porte auto.",
+      toilet: "Toilette adaptée", parking: "Stat. réservé", elevator: "Ascenseur",
+      wide_aisles: "Allées larges", hoist_lift: "Mise à l'eau / Lève-pers.", sensory_tactile: "Repères tactiles / Calme"
+    }
+  },
+  en: {
+    subtitle: "Montreal • South Shore • North Shore",
+    theme_light: "Light", theme_dark: "Dark", theme_contrast: "Contrast",
+    favorites: "Favorites", print_sheet: "Patient Sheet", share: "Share", suggest: "Suggest",
+    search_ph: "Place, address or postal code (e.g. H2X, J4Y, H7T)...",
+    my_location: "My location", any_distance: "Any distance", all_regions: "All Greater Montreal",
+    verified_only: "Verified", categories_label: "Categories", accessibility_label: "Accessibility Features",
+    reset: "Reset", recenter: "Recenter", list_view: "List", map_view: "Map",
+    places_found: "places found", verified_badge: "Verified", osm_badge: "OpenStreetMap",
+    directions: "Directions", website_lbl: "Website", load_more: "Load more places",
+    no_results: "No places match these filters. Try widening the radius or resetting filters.",
+    suggest_title: "Suggest an accessible place", place_name: "Place name *",
+    category: "Category", region: "Area", address: "Full address *", phone: "Phone",
+    website: "Website", description: "Helpful details for patients", save_local: "Add to my map",
+    cats: {
+      soins: "Healthcare & Clinics", pharmacie: "Pharmacies & Mobility Aids", avd: "Groceries & Daily Living",
+      services: "Services & Support", resto: "Restaurants & Cafés", loisirs: "Culture & Leisure",
+      parcs: "Parks & Outdoors", sports: "Sports & Pools", transport: "Transit & Access",
+      hebergement: "Hotels & Libraries"
+    },
+    feats: {
+      step_free: "Step-free", ramp: "Ramp", auto_door: "Auto door",
+      toilet: "Adapted toilet", parking: "Reserved parking", elevator: "Elevator",
+      wide_aisles: "Wide aisles", hoist_lift: "Pool lift / Hoist", sensory_tactile: "Tactile / Quiet"
+    }
+  },
+  zh: {
+    subtitle: "蒙特利尔 • 南岸 • 北岸",
+    theme_light: "浅色", theme_dark: "深色", theme_contrast: "高对比",
+    favorites: "收藏", print_sheet: "打印清单", share: "分享", suggest: "推荐地点",
+    search_ph: "搜索地点、地址或邮编 (例如 H2X, J4Y)...",
+    my_location: "我的位置", any_distance: "不限距离", all_regions: "大蒙特利尔全区",
+    verified_only: "已核实", categories_label: "类别", accessibility_label: "无障碍设施",
+    reset: "重置", recenter: "重置地图", list_view: "列表", map_view: "地图",
+    places_found: "个地点", verified_badge: "已核实", osm_badge: "OpenStreetMap",
+    directions: "导航", website_lbl: "网站", load_more: "加载更多",
+    no_results: "没有找到符合条件的地点，请尝试放宽筛选。",
+    suggest_title: "推荐无障碍地点", place_name: "地点名称 *", category: "类别", region: "区域",
+    address: "完整地址 *", phone: "电话", website: "网站", description: "无障碍设施说明", save_local: "添加到地图",
+    cats: {
+      soins: "医疗与诊所", pharmacie: "药房与辅具", avd: "超市与日常",
+      services: "社区服务", resto: "餐厅与咖啡", loisirs: "文化与休闲",
+      parcs: "公园与户外", sports: "体育与泳池", transport: "无障碍交通", hebergement: "酒店与图书馆"
+    },
+    feats: {
+      step_free: "无台阶入口", ramp: "坡道", auto_door: "自动门", toilet: "无障碍洗手间",
+      parking: "无障碍车位", elevator: "电梯", wide_aisles: "宽通道", hoist_lift: "移位机/入水椅", sensory_tactile: "盲道/安静区"
+    }
+  },
+  vi: {
+    subtitle: "Montréal • Bờ Nam • Bờ Bắc",
+    theme_light: "Sáng", theme_dark: "Tối", theme_contrast: "Tương phản",
+    favorites: "Yêu thích", print_sheet: "In phiếu", share: "Chia sẻ", suggest: "Đề xuất",
+    search_ph: "Tìm địa điểm, địa chỉ hoặc mã bưu điện (VD: H2X, J4Y)...",
+    my_location: "Vị trí của tôi", any_distance: "Mọi khoảng cách", all_regions: "Toàn vùng Montréal",
+    verified_only: "Đã xác minh", categories_label: "Danh mục", accessibility_label: "Tiêu chí tiếp cận",
+    reset: "Đặt lại", recenter: "Căn giữa", list_view: "Danh sách", map_view: "Bản đồ",
+    places_found: "địa điểm", verified_badge: "Đã xác minh", osm_badge: "OpenStreetMap",
+    directions: "Chỉ đường", website_lbl: "Trang web", load_more: "Xem thêm",
+    no_results: "Không tìm thấy địa điểm phù hợp.",
+    suggest_title: "Đề xuất địa điểm tiếp cận", place_name: "Tên địa điểm *", category: "Danh mục",
+    region: "Khu vực", address: "Địa chỉ *", phone: "Điện thoại", website: "Trang web", description: "Mô tả", save_local: "Thêm",
+    cats: {
+      soins: "Y tế & Phòng khám", pharmacie: "Nhà thuốc & Dụng cụ", avd: "Siêu thị & Mua sắm",
+      services: "Dịch vụ & Hỗ trợ", resto: "Nhà hàng & Cà phê", loisirs: "Văn hóa & Giải trí",
+      parcs: "Công viên", sports: "Thể thao & Hồ bơi", transport: "Giao thông", hebergement: "Khách sạn & Thư viện"
+    },
+    feats: {
+      step_free: "Lối vào phẳng", ramp: "Đường dốc", auto_door: "Cửa tự động", toilet: "Nhà vệ sinh riêng",
+      parking: "Đỗ xe ưu tiên", elevator: "Thang máy", wide_aisles: "Lối đi rộng", hoist_lift: "Thiết bị nâng", sensory_tactile: "Chỉ dẫn xúc giác"
+    }
+  },
+  ar: {
+    subtitle: "مونتريال • الضفة الجنوبية • الضفة الشمالية",
+    theme_light: "فاتح", theme_dark: "داكن", theme_contrast: "تباين عالٍ",
+    favorites: "المفضلة", print_sheet: "طباعة للمريض", share: "مشاركة", suggest: "اقتراح مكان",
+    search_ph: "ابحث عن مكان أو عنوان أو رمز بريدي (H2X, J4Y)...",
+    my_location: "موقعي", any_distance: "أي مسافة", all_regions: "مونتريال الكبرى",
+    verified_only: "موثّق", categories_label: "الفئات", accessibility_label: "معايير إمكانية الوصول",
+    reset: "إعادة ضبط", recenter: "توسيط", list_view: "القائمة", map_view: "الخريطة",
+    places_found: "مكان", verified_badge: "موثّق", osm_badge: "OpenStreetMap",
+    directions: "الاتجاهات", website_lbl: "الموقع", load_more: "عرض المزيد",
+    no_results: "لا توجد أماكن مطابقة لهذه الفلاتر.",
+    suggest_title: "اقتراح مكان مهيأ", place_name: "اسم المكان *", category: "الفئة",
+    region: "المنطقة", address: "العنوان *", phone: "الهاتف", website: "الموقع", description: "وصف مفيد للمرضى", save_local: "إضافة",
+    cats: {
+      soins: "الرعاية والعيادات", pharmacie: "الصيدليات والأدوات", avd: "البقالة والمتاجر",
+      services: "الخدمات والمنظمات", resto: "المطاعم والمقاهي", loisirs: "الثقافة والترفيه",
+      parcs: "الحدائق", sports: "الرياضة والمسابح", transport: "النقل المهيأ", hebergement: "الفنادق والمكتبات"
+    },
+    feats: {
+      step_free: "مدخل بدون درج", ramp: "منحدر", auto_door: "باب آلي", toilet: "دورة مياه مهيأة",
+      parking: "موقف مخصص", elevator: "مصعد", wide_aisles: "ممرات واسعة", hoist_lift: "رافعة / مسبح مهيأ", sensory_tactile: "إشارات لمسية / هادئ"
+    }
+  },
+  es: {
+    subtitle: "Montreal • Rive-Sud • Rive-Nord",
+    theme_light: "Claro", theme_dark: "Oscuro", theme_contrast: "Contraste",
+    favorites: "Favoritos", print_sheet: "Ficha paciente", share: "Compartir", suggest: "Sugerir",
+    search_ph: "Lugar, dirección o código postal (ej. H2X, J4Y)...",
+    my_location: "Mi ubicación", any_distance: "Cualquier distancia", all_regions: "Gran Montreal",
+    verified_only: "Verificados", categories_label: "Categorías", accessibility_label: "Criterios de accesibilidad",
+    reset: "Restablecer", recenter: "Centrar", list_view: "Lista", map_view: "Mapa",
+    places_found: "lugares", verified_badge: "Verificado", osm_badge: "OpenStreetMap",
+    directions: "Cómo llegar", website_lbl: "Sitio web", load_more: "Mostrar más",
+    no_results: "No se encontraron lugares con estos filtros.",
+    suggest_title: "Sugerir un lugar accesible", place_name: "Nombre *", category: "Categoría",
+    region: "Región", address: "Dirección *", phone: "Teléfono", website: "Sitio web", description: "Descripción", save_local: "Agregar",
+    cats: {
+      soins: "Salud y Clínicas", pharmacie: "Farmacias y Ayudas", avd: "Supermercados",
+      services: "Servicios", resto: "Restaurantes", loisirs: "Cultura y Ocio",
+      parcs: "Parques", sports: "Deportes y Piscinas", transport: "Transporte", hebergement: "Hoteles y Bibliotecas"
+    },
+    feats: {
+      step_free: "Sin escalones", ramp: "Rampa", auto_door: "Puerta auto.", toilet: "Baño adaptado",
+      parking: "Estac. reservado", elevator: "Ascensor", wide_aisles: "Pasillos anchos", hoist_lift: "Grúa / Acceso piscina", sensory_tactile: "Táctil / Tranquilo"
+    }
+  },
+  ht: {
+    subtitle: "Monreyal • Rive-Sud • Rive-Nord",
+    theme_light: "Klè", theme_dark: "Fènwa", theme_contrast: "Kontras",
+    favorites: "Favori", print_sheet: "Enprime fich", share: "Pataje", suggest: "Sijere",
+    search_ph: "Chèche yon kote, adrès oswa kòd postal (H2X, J4Y)...",
+    my_location: "Pozisyon mwen", any_distance: "Tout distans", all_regions: "Gran Monreyal",
+    verified_only: "Verifye", categories_label: "Kategori", accessibility_label: "Aksesibilite",
+    reset: "Reyinisyalize", recenter: "Santre", list_view: "Lis", map_view: "Kat",
+    places_found: "kote", verified_badge: "Verifye", osm_badge: "OpenStreetMap",
+    directions: "Wout", website_lbl: "Sit wèb", load_more: "Wè plis",
+    no_results: "Pa gen kote ki koresponn ak filtè sa yo.",
+    suggest_title: "Sijere yon kote aksesib", place_name: "Non kote a *", category: "Kategori",
+    region: "Rejyon", address: "Adrès *", phone: "Telefòn", website: "Sit wèb", description: "Deskripsyon", save_local: "Ajoute",
+    cats: {
+      soins: "Swen & Klinik", pharmacie: "Famasi & Ekipman", avd: "Makèt & Episri",
+      services: "Sèvis & Òganis", resto: "Restoran & Kafe", loisirs: "Kilti & Lwazi",
+      parcs: "Pak & Deyò", sports: "Espò & Pisin", transport: "Transpò", hebergement: "Otèl & Bibliyotèk"
+    },
+    feats: {
+      step_free: "San mach", ramp: "Ranp", auto_door: "Pòt otomatik", toilet: "Twalèt adapte",
+      parking: "Pakin rezève", elevator: "Asansè", wide_aisles: "Koulwa laj", hoist_lift: "Aparèy leve", sensory_tactile: "Siy taktil / Kalm"
+    }
+  }
+};
+
+// Dictionnaire instantané des préfixes postaux du Grand Montréal (FSA)
+const POSTAL_FSA = {
+  H1A:[45.654,-73.505], H1B:[45.632,-73.506], H1C:[45.662,-73.553], H1E:[45.635,-73.588],
+  H1G:[45.603,-73.633], H1H:[45.595,-73.643], H1J:[45.611,-73.558], H1K:[45.602,-73.541],
+  H1L:[45.593,-73.523], H1M:[45.588,-73.556], H1N:[45.573,-73.539], H1P:[45.591,-73.586],
+  H1R:[45.591,-73.605], H1S:[45.582,-73.591], H1T:[45.573,-73.568], H1V:[45.556,-73.541],
+  H1W:[45.545,-73.548], H1X:[45.557,-73.575], H1Y:[45.550,-73.585], H1Z:[45.568,-73.606],
+  H2A:[45.563,-73.611], H2B:[45.576,-73.654], H2C:[45.564,-73.658], H2E:[45.552,-73.611],
+  H2G:[45.545,-73.595], H2H:[45.535,-73.573], H2J:[45.527,-73.580], H2K:[45.528,-73.556],
+  H2L:[45.518,-73.561], H2M:[45.556,-73.642], H2N:[45.541,-73.647], H2P:[45.544,-73.627],
+  H2R:[45.540,-73.612], H2S:[45.535,-73.602], H2T:[45.525,-73.595], H2V:[45.518,-73.609],
+  H2W:[45.516,-73.578], H2X:[45.510,-73.567], H2Y:[45.505,-73.554], H2Z:[45.505,-73.562],
+  H3A:[45.503,-73.573], H3B:[45.500,-73.569], H3C:[45.493,-73.560], H3E:[45.462,-73.546],
+  H3G:[45.498,-73.580], H3H:[45.491,-73.584], H3J:[45.487,-73.576], H3K:[45.480,-73.564],
+  H3L:[45.551,-73.671], H3M:[45.536,-73.694], H3N:[45.529,-73.625], H3P:[45.516,-73.644],
+  H3R:[45.512,-73.654], H3S:[45.503,-73.628], H3T:[45.499,-73.619], H3V:[45.495,-73.615],
+  H3W:[45.491,-73.635], H3X:[45.481,-73.638], H3Y:[45.486,-73.600], H3Z:[45.486,-73.590],
+  H4A:[45.472,-73.618], H4B:[45.461,-73.638], H4C:[45.475,-73.587], H4E:[45.456,-73.596],
+  H4G:[45.463,-73.569], H4H:[45.452,-73.577], H4J:[45.531,-73.713], H4K:[45.524,-73.732],
+  H4L:[45.515,-73.681], H4M:[45.518,-73.672], H4N:[45.528,-73.671], H4P:[45.496,-73.658],
+  H4R:[45.508,-73.707], H4S:[45.491,-73.732], H4T:[45.487,-73.693], H4V:[45.463,-73.648],
+  H4W:[45.469,-73.666], H4X:[45.452,-73.648], H4Y:[45.457,-73.750],
+  H7A:[45.667,-73.597], H7B:[45.649,-73.637], H7C:[45.622,-73.646], H7E:[45.603,-73.664],
+  H7G:[45.575,-73.692], H7H:[45.624,-73.748], H7J:[45.629,-73.729], H7K:[45.611,-73.732],
+  H7L:[45.614,-73.788], H7M:[45.592,-73.713], H7N:[45.560,-73.713], H7P:[45.573,-73.796],
+  H7R:[45.545,-73.845], H7S:[45.564,-73.746], H7T:[45.566,-73.753], H7V:[45.552,-73.744],
+  H7W:[45.536,-73.754], H7X:[45.528,-73.816], H7Y:[45.523,-73.857],
+  H8N:[45.437,-73.621], H8P:[45.423,-73.606], H8R:[45.432,-73.646], H8S:[45.439,-73.677],
+  H8T:[45.448,-73.704], H8Y:[45.505,-73.816], H8Z:[45.495,-73.854],
+  H9A:[45.485,-73.829], H9B:[45.485,-73.802], H9C:[45.491,-73.893], H9E:[45.485,-73.928],
+  H9G:[45.475,-73.835], H9H:[45.468,-73.867], H9J:[45.454,-73.869], H9K:[45.458,-73.908],
+  H9P:[45.458,-73.764], H9R:[45.458,-73.821], H9S:[45.446,-73.760], H9W:[45.431,-73.873],
+  H9X:[45.415,-73.938],
+  J3B:[45.308,-73.258], J3E:[45.588,-73.341], J3G:[45.567,-73.208], J3H:[45.558,-73.195],
+  J3L:[45.444,-73.296], J3N:[45.531,-73.285], J3V:[45.526,-73.345], J3X:[45.683,-73.437],
+  J3Y:[45.492,-73.418], J3Z:[45.469,-73.401],
+  J4B:[45.595,-73.449], J4G:[45.545,-73.485], J4H:[45.533,-73.495], J4J:[45.522,-73.485],
+  J4K:[45.524,-73.509], J4L:[45.515,-73.475], J4M:[45.540,-73.460], J4N:[45.557,-73.465],
+  J4P:[45.502,-73.511], J4R:[45.491,-73.509], J4S:[45.482,-73.515], J4T:[45.495,-73.475],
+  J4V:[45.493,-73.485], J4W:[45.468,-73.468], J4X:[45.450,-73.480], J4Y:[45.444,-73.445],
+  J4Z:[45.475,-73.458],
+  J5A:[45.374,-73.568], J5B:[45.374,-73.548], J5C:[45.402,-73.575], J5R:[45.415,-73.485],
+  J6A:[45.736,-73.468], J6E:[45.774,-73.440], J6J:[45.367,-73.748], J6K:[45.357,-73.719],
+  J6R:[45.332,-73.745], J6V:[45.716,-73.505], J6W:[45.702,-73.635], J6X:[45.688,-73.638],
+  J6Y:[45.712,-73.666], J6Z:[45.664,-73.760],
+  J7A:[45.637,-73.796], J7B:[45.668,-73.781], J7C:[45.676,-73.882], J7E:[45.641,-73.841],
+  J7G:[45.614,-73.838], J7H:[45.626,-73.845], J7K:[45.747,-73.606], J7L:[45.747,-73.758],
+  J7M:[45.764,-73.610], J7N:[45.662,-73.922], J7P:[45.541,-73.918], J7R:[45.565,-73.900],
+  J7V:[45.402,-74.035], J7W:[45.378,-73.972], J7X:[45.388,-74.018], J7Y:[45.779,-73.998], J7Z:[45.775,-74.005]
+};
+
+// State
+const state = {
+  places: [],
+  filtered: [],
+  meta: { updated_at: null, sources: {} },
+  lang: localStorage.getItem("agm_lang") || "fr",
+  theme: localStorage.getItem("agm_theme") || "light",
+  largeText: localStorage.getItem("agm_large") === "true",
+  query: "",
+  region: "all",
+  categories: new Set(),
+  features: new Set(),
+  verifiedOnly: false,
+  favOnly: false,
+  favorites: new Set(JSON.parse(localStorage.getItem("agm_favs") || "[]")),
+  localSuggestions: JSON.parse(localStorage.getItem("agm_local_places") || "[]"),
+  userLoc: null, // { lat, lng, label }
+  radiusKm: 0,
+  selectedId: null,
+  renderLimit: 50,
+  accCollapsed: false
+};
+
+let map, tileLayer, clusterGroup, radiusCircle, userMarker;
+const markerById = new Map();
+
+function t(key) {
+  const dict = I18N[state.lang] || I18N.fr;
+  return dict[key] || I18N.fr[key] || key;
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function escapeHtml(str) {
+  return String(str || "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
+// Init Map
+function initMap() {
+  map = L.map("map", { zoomControl: true }).setView([45.515, -73.60], 11);
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 48, disableClusteringAtZoom: 16 });
+  map.addLayer(clusterGroup);
+  applyTileLayer();
+}
+
+function applyTileLayer() {
+  if (!map) return;
+  if (tileLayer) map.removeLayer(tileLayer);
+  let url = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  if (state.theme === "dark") {
+    url = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  } else if (state.theme === "contrast") {
+    url = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+  }
+  tileLayer = L.tileLayer(url, {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: "abcd", maxZoom: 19
+  }).addTo(map);
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute("data-theme", state.theme);
+  document.documentElement.setAttribute("data-large-text", state.largeText ? "true" : "false");
+  localStorage.setItem("agm_theme", state.theme);
+  localStorage.setItem("agm_large", state.largeText ? "true" : "false");
+  const btn = document.getElementById("themeBtn");
+  if (state.theme === "light") btn.innerHTML = `🌙 <span>${t("theme_dark")}</span>`;
+  else if (state.theme === "dark") btn.innerHTML = `⚡ <span>${t("theme_contrast")}</span>`;
+  else btn.innerHTML = `☀️ <span>${t("theme_light")}</span>`;
+  document.getElementById("textSizeBtn").classList.toggle("active", state.largeText);
+  applyTileLayer();
+}
+
+function applyLanguage() {
+  localStorage.setItem("agm_lang", state.lang);
+  document.documentElement.lang = state.lang;
+  document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
+  document.getElementById("langSelect").value = state.lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  document.getElementById("searchInput").placeholder = t("search_ph");
+  applyTheme();
+  renderFilterChips();
+  populateSuggestModal();
+  renderResults();
+}
+
+// Load ./data/places.json with graceful fallback
+async function loadData() {
+  const badge = document.getElementById("syncBadge");
+  try {
+    const resp = await fetch("./data/places.json?v=" + Math.floor(Date.now() / 3600000));
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const list = Array.isArray(data) ? data : (data.places || []);
+    state.places = [...state.localSuggestions, ...list];
+    state.meta = {
+      updated_at: data.updated_at || null,
+      sources: data.sources || { total: list.length }
+    };
+    const dateStr = state.meta.updated_at ? new Date(state.meta.updated_at).toLocaleDateString(state.lang === "en" ? "en-CA" : "fr-CA") : "";
+    badge.textContent = `✓ ${state.places.length} lieux${dateStr ? " • MAJ " + dateStr : ""}`;
+  } catch (e) {
+    state.places = [...state.localSuggestions, ...FALLBACK_PLACES];
+    state.meta = { updated_at: null, sources: { curated: FALLBACK_PLACES.length } };
+    badge.textContent = `✓ ${state.places.length} lieux (base locale)`;
+  }
+  updateFavCounter();
+  applyFilters();
+}
+
+function renderFilterChips() {
+  const dict = I18N[state.lang] || I18N.fr;
+  // Category counts respecting current region/search
+  const counts = {};
+  state.places.forEach(p => {
+    if (state.region !== "all" && p.region !== state.region) return;
+    counts[p.category] = (counts[p.category] || 0) + 1;
+  });
+
+  const catContainer = document.getElementById("categoryChips");
+  catContainer.innerHTML = CATEGORIES.map(c => {
+    const active = state.categories.has(c.id) ? "active" : "";
+    return `<button class="chip ${active}" data-cat="${c.id}">${c.icon} ${dict.cats[c.id]} <span class="cnt">(${counts[c.id] || 0})</span></button>`;
+  }).join("");
+  catContainer.querySelectorAll(".chip").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.cat;
+      state.categories.has(id) ? state.categories.delete(id) : state.categories.add(id);
+      state.renderLimit = 50;
+      applyFilters();
+    };
+  });
+
+  const featContainer = document.getElementById("featureChips");
+  featContainer.style.display = state.accCollapsed ? "none" : "flex";
+  featContainer.innerHTML = FEATURES.map(f => {
+    const active = state.features.has(f.id) ? "active" : "";
+    return `<button class="chip ${active}" data-feat="${f.id}">${f.icon} ${dict.feats[f.id]}</button>`;
+  }).join("");
+  featContainer.querySelectorAll(".chip").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.feat;
+      state.features.has(id) ? state.features.delete(id) : state.features.add(id);
+      state.renderLimit = 50;
+      applyFilters();
+    };
+  });
+}
+
+function applyFilters() {
+  const q = state.query.trim().toLowerCase();
+  const isPostalQuery = /^[hj]\d[a-z]/i.test(q.replace(/\s+/g, ""));
+
+  let list = state.places.filter(p => {
+    if (state.region !== "all" && p.region !== state.region) return false;
+    if (state.verifiedOnly && !p.verified) return false;
+    if (state.favOnly && !state.favorites.has(p.id)) return false;
+    if (state.categories.size > 0 && !state.categories.has(p.category)) return false;
+    if (state.features.size > 0) {
+      const pf = new Set(p.features || []);
+      for (const req of state.features) if (!pf.has(req)) return false;
+    }
+    if (q && !isPostalQuery) {
+      const hay = `${p.name} ${p.address} ${p.city} ${p.desc_fr} ${p.desc_en}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Compute distance if userLoc is set
+  if (state.userLoc) {
+    list = list.map(p => ({
+      ...p,
+      _dist: haversineKm(state.userLoc.lat, state.userLoc.lng, p.lat, p.lng)
+    }));
+    if (state.radiusKm > 0) {
+      list = list.filter(p => p._dist <= state.radiusKm);
+    }
+    list.sort((a, b) => a._dist - b._dist);
+  } else {
+    list = list.map(p => ({ ...p, _dist: null }));
+  }
+
+  state.filtered = list;
+  renderFilterChips();
+  renderResults();
+  renderMapMarkers();
+}
+
+function renderResults() {
+  const dict = I18N[state.lang] || I18N.fr;
+  const countEl = document.getElementById("resultsCount");
+  countEl.textContent = `${state.filtered.length} ${t("places_found")}`;
+
+  const geoNote = document.getElementById("activeGeoNote");
+  if (state.userLoc) {
+    geoNote.innerHTML = `📍 ${escapeHtml(state.userLoc.label)} ${state.radiusKm ? `(≤ ${state.radiusKm} km)` : ""} <button class="filter-toggle-btn" onclick="clearUserLoc()">✕</button>`;
+  } else {
+    geoNote.textContent = "";
+  }
+
+  const listEl = document.getElementById("resultsList");
+  if (state.filtered.length === 0) {
+    listEl.innerHTML = `<div class="card" style="text-align:center; padding:24px;">${t("no_results")}</div>`;
+    return;
+  }
+
+  const slice = state.filtered.slice(0, state.renderLimit);
+  const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+  const featMap = Object.fromEntries(FEATURES.map(f => [f.id, f]));
+
+  const html = slice.map(p => {
+    const c = catMap[p.category] || { icon: "📍", color: "#0f766e" };
+    const isFav = state.favorites.has(p.id);
+    const desc = state.lang === "en" ? (p.desc_en || p.desc_fr) : (p.desc_fr || p.desc_en);
+    const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+    const featHtml = (p.features || []).map(fid => {
+      const f = featMap[fid];
+      return f ? `<span class="feat-tag">${f.icon} ${dict.feats[fid] || fid}</span>` : "";
+    }).join("");
+
+    return `
+      <article class="card ${state.selectedId === p.id ? "selected" : ""}" data-id="${escapeHtml(p.id)}">
+        <div class="card-top">
+          <h3 class="card-title">${c.icon} ${escapeHtml(p.name)}</h3>
+          <button class="fav-btn ${isFav ? "is-fav" : ""}" onclick="event.stopPropagation(); toggleFav('${escapeHtml(p.id)}')" aria-label="Favori">${isFav ? "❤️" : "🤍"}</button>
+        </div>
+        <div class="card-meta">
+          <span class="badge">${dict.cats[p.category] || p.category}</span>
+          ${p.verified ? `<span class="badge badge-verified">✓ ${t("verified_badge")}</span>` : `<span class="badge">${t("osm_badge")}</span>`}
+          ${p._dist !== null ? `<span class="badge badge-dist">${p._dist.toFixed(1)} km</span>` : ""}
+          <span>${escapeHtml(p.address || p.city)}</span>
+        </div>
+        <p class="card-desc">${escapeHtml(desc)}</p>
+        <div class="feat-tags">${featHtml}</div>
+        <div class="card-footer">
+          <div class="card-links">
+            <a href="${gmapsUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🧭 ${t("directions")}</a>
+            ${p.phone ? `<a href="tel:${escapeHtml(p.phone)}" onclick="event.stopPropagation()">📞 ${escapeHtml(p.phone)}</a>` : ""}
+            ${p.website ? `<a href="${escapeHtml(p.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🌐 ${t("website_lbl")}</a>` : ""}
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  const remaining = state.filtered.length - slice.length;
+  const loadMoreHtml = remaining > 0
+    ? `<div class="load-more-wrap" style="text-align:center; padding:8px;"><button class="btn btn-primary" id="loadMoreBtn">${t("load_more")} (+${Math.min(60, remaining)} / ${remaining})</button></div>`
+    : "";
+
+  listEl.innerHTML = html + loadMoreHtml;
+
+  listEl.querySelectorAll(".card[data-id]").forEach(el => {
+    el.onclick = () => focusPlace(el.dataset.id);
+  });
+  const moreBtn = document.getElementById("loadMoreBtn");
+  if (moreBtn) {
+    moreBtn.onclick = () => { state.renderLimit += 60; renderResults(); };
+  }
+}
+
+function makePinIcon(color, iconChar) {
+  return L.divIcon({
+    className: "custom-pin",
+    html: `<div style="background:${color}; color:#fff; width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-size:14px; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,0.35);">${iconChar}</div>`,
+    iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14]
+  });
+}
+
+function renderMapMarkers() {
+  if (!clusterGroup) return;
+  clusterGroup.clearLayers();
+  markerById.clear();
+
+  const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+  const dict = I18N[state.lang] || I18N.fr;
+  const markers = [];
+
+  for (const p of state.filtered) {
+    const c = catMap[p.category] || { icon: "📍", color: "#0f766e" };
+    const m = L.marker([p.lat, p.lng], { icon: makePinIcon(c.color, c.icon) });
+    const desc = state.lang === "en" ? (p.desc_en || p.desc_fr) : (p.desc_fr || p.desc_en);
+    const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+    const feats = (p.features || []).map(f => dict.feats[f] || f).join(" • ");
+    m.bindPopup(`
+      <div style="min-width:210px; max-width:270px;">
+        <strong>${c.icon} ${escapeHtml(p.name)}</strong><br/>
+        <small style="opacity:0.8">${escapeHtml(p.address || p.city)}</small>
+        <p style="margin:6px 0; font-size:12.5px;">${escapeHtml(desc)}</p>
+        ${feats ? `<div style="font-size:11.5px; opacity:0.85; margin-bottom:6px;">♿ ${escapeHtml(feats)}</div>` : ""}
+        <div style="display:flex; gap:10px; font-size:12.5px; font-weight:600;">
+          <a href="${gmaps}" target="_blank" rel="noopener">🧭 ${t("directions")}</a>
+          ${p.website ? `<a href="${escapeHtml(p.website)}" target="_blank" rel="noopener">🌐 ${t("website_lbl")}</a>` : ""}
+          <a href="#" onclick="event.preventDefault(); toggleFav('${escapeHtml(p.id)}')">${state.favorites.has(p.id) ? "❤️" : "🤍"}</a>
+        </div>
+      </div>
+    `);
+    markerById.set(p.id, m);
+    markers.push(m);
+  }
+  clusterGroup.addLayers(markers);
+
+  // User location & radius circle
+  if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  if (state.userLoc) {
+    userMarker = L.circleMarker([state.userLoc.lat, state.userLoc.lng], {
+      radius: 8, fillColor: "#2563eb", color: "#fff", weight: 3, fillOpacity: 1
+    }).addTo(map).bindPopup(`📍 ${escapeHtml(state.userLoc.label)}`);
+    if (state.radiusKm > 0) {
+      radiusCircle = L.circle([state.userLoc.lat, state.userLoc.lng], {
+        radius: state.radiusKm * 1000, color: "#0f766e", weight: 2, fillOpacity: 0.08
+      }).addTo(map);
+    }
+  }
+}
+
+function focusPlace(id) {
+  state.selectedId = id;
+  const p = state.filtered.find(x => x.id === id);
+  if (!p) return;
+  const m = markerById.get(id);
+  if (window.innerWidth <= 900) setMobileView("map");
+  setTimeout(() => {
+    map.invalidateSize();
+    if (m) {
+      clusterGroup.zoomToShowLayer(m, () => {
+        map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15));
+        m.openPopup();
+      });
+    } else {
+      map.setView([p.lat, p.lng], 15);
+    }
+  }, 60);
+}
+
+window.toggleFav = function(id) {
+  if (state.favorites.has(id)) state.favorites.delete(id);
+  else state.favorites.add(id);
+  localStorage.setItem("agm_favs", JSON.stringify([...state.favorites]));
+  updateFavCounter();
+  applyFilters();
+};
+
+function updateFavCounter() {
+  document.getElementById("favCount").textContent = state.favorites.size;
+  document.getElementById("favFilterBtn").classList.toggle("active", state.favOnly);
+}
+
+window.clearUserLoc = function() {
+  state.userLoc = null;
+  state.radiusKm = 0;
+  document.getElementById("radiusSelect").value = "0";
+  applyFilters();
+};
+
+async function geocodeInput() {
+  const raw = document.getElementById("searchInput").value.trim();
+  if (!raw) return;
+  const cleaned = raw.toUpperCase().replace(/\s+/g, "");
+  const fsa = cleaned.slice(0, 3);
+  if (POSTAL_FSA[fsa]) {
+    const [lat, lng] = POSTAL_FSA[fsa];
+    state.userLoc = { lat, lng, label: fsa };
+    if (state.radiusKm === 0) { state.radiusKm = 5; document.getElementById("radiusSelect").value = "5"; }
+    state.query = "";
+    applyFilters();
+    map.setView([lat, lng], 13);
+    showToast(`📍 Zone ${fsa} localisée (≤ ${state.radiusKm} km)`);
+    return;
+  }
+  // Nominatim lookup for full street addresses
+  try {
+    showToast("🔍 Recherche de l'adresse...");
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ca&q=${encodeURIComponent(raw + ", Quebec, Canada")}`;
+    const res = await fetch(url);
+    const arr = await res.json();
+    if (arr && arr.length > 0) {
+      const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
+      state.userLoc = { lat, lng, label: raw };
+      if (state.radiusKm === 0) { state.radiusKm = 5; document.getElementById("radiusSelect").value = "5"; }
+      state.query = "";
+      applyFilters();
+      map.setView([lat, lng], 13);
+      showToast(`📍 Adresse trouvée : ${raw}`);
+    } else {
+      state.query = raw;
+      applyFilters();
+    }
+  } catch (e) {
+    state.query = raw;
+    applyFilters();
+  }
+}
+
+function locateMe() {
+  if (!navigator.geolocation) {
+    showToast("Géolocalisation non disponible — centrage sur Montréal.");
+    state.userLoc = { lat: 45.5088, lng: -73.5617, label: "Montréal (centre)" };
+    applyFilters();
+    return;
+  }
+  showToast("📍 Localisation en cours...");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: t("my_location") };
+      if (state.radiusKm === 0) { state.radiusKm = 5; document.getElementById("radiusSelect").value = "5"; }
+      applyFilters();
+      map.setView([state.userLoc.lat, state.userLoc.lng], 13);
+      showToast("📍 Position détectée !");
+    },
+    () => {
+      state.userLoc = { lat: 45.5088, lng: -73.5617, label: "Montréal (centre)" };
+      applyFilters();
+      map.setView([45.5088, -73.5617], 12);
+      showToast("Position refusée — centrage sur le centre-ville de Montréal.");
+    },
+    { timeout: 8000 }
+  );
+}
+
+function setMobileView(view) {
+  const ws = document.getElementById("workspace");
+  ws.classList.toggle("mobile-list", view === "list");
+  ws.classList.toggle("mobile-map", view === "map");
+  document.getElementById("mobListBtn").classList.toggle("btn-primary", view === "list");
+  document.getElementById("mobMapBtn").classList.toggle("btn-primary", view === "map");
+  if (view === "map") setTimeout(() => map.invalidateSize(), 80);
+}
+
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+window.closeModal = function(id) { document.getElementById(id).classList.remove("open"); };
+
+function populateSuggestModal() {
+  const dict = I18N[state.lang] || I18N.fr;
+  document.getElementById("sCategory").innerHTML = CATEGORIES.map(c =>
+    `<option value="${c.id}">${c.icon} ${dict.cats[c.id]}</option>`
+  ).join("");
+  const sf = document.getElementById("suggestFeatures");
+  sf.innerHTML = FEATURES.map(f =>
+    `<button type="button" class="chip" data-sfeat="${f.id}">${f.icon} ${dict.feats[f.id]}</button>`
+  ).join("");
+  sf.querySelectorAll(".chip").forEach(b => b.onclick = () => b.classList.toggle("active"));
+}
+
+function buildSuggestPayload() {
+  const feats = [...document.querySelectorAll("#suggestFeatures .chip.active")].map(b => b.dataset.sfeat);
+  const region = document.getElementById("sRegion").value;
+  const defaults = { montreal: [45.5088, -73.5617], "rive-sud": [45.472, -73.47], "rive-nord": [45.565, -73.74] };
+  const [lat, lng] = defaults[region] || defaults.montreal;
+  return {
+    id: "local-" + Date.now(),
+    name: document.getElementById("sName").value.trim(),
+    category: document.getElementById("sCategory").value,
+    region,
+    city: region === "montreal" ? "Montréal" : (region === "rive-sud" ? "Rive-Sud" : "Rive-Nord"),
+    address: document.getElementById("sAddress").value.trim(),
+    lat, lng,
+    phone: document.getElementById("sPhone").value.trim(),
+    website: document.getElementById("sWebsite").value.trim(),
+    features: feats.length ? feats : ["step_free"],
+    desc_fr: document.getElementById("sDesc").value.trim() || "Lieu suggéré par un utilisateur.",
+    desc_en: document.getElementById("sDesc").value.trim() || "User-suggested accessible place.",
+    source: "local",
+    verified: true
+  };
+}
+
+function renderInfoModal() {
+  const byRegion = { montreal: 0, "rive-sud": 0, "rive-nord": 0 };
+  const bySource = { curated: 0, openstreetmap: 0, custom_csv: 0, local: 0 };
+  state.places.forEach(p => {
+    if (byRegion[p.region] !== undefined) byRegion[p.region]++;
+    if (bySource[p.source] !== undefined) bySource[p.source]++;
+  });
+  const dateStr = state.meta.updated_at
+    ? new Date(state.meta.updated_at).toLocaleString("fr-CA")
+    : "Base intégrée (lancez le workflow GitHub Actions pour activer les 800–2 500+ lieux)";
+
+  document.getElementById("infoContent").innerHTML = `
+    <p><strong>Dernière synchronisation :</strong> ${escapeHtml(dateStr)}</p>
+    <ul>
+      <li><strong>Total des lieux affichables :</strong> ${state.places.length}</li>
+      <li>Montréal : ${byRegion.montreal} • Rive-Sud : ${byRegion["rive-sud"]} • Rive-Nord / Laval : ${byRegion["rive-nord"]}</li>
+      <li>Base clinique vérifiée : ${bySource.curated} • OpenStreetMap : ${bySource.openstreetmap} • Ajouts équipe CSV : ${bySource.custom_csv}</li>
+    </ul>
+    <p><strong>Mise à jour automatique :</strong> Lorsque ce site est hébergé sur GitHub Pages, le robot <em>GitHub Actions</em> met à jour <code>data/places.json</code> automatiquement chaque dimanche à 3 h du matin en fusionnant OpenStreetMap, la base vérifiée et le fichier <code>data/custom_places.csv</code>.</p>
+    <p><strong>Ressources complémentaires officielles :</strong></p>
+    <ul>
+      <li><a href="https://www.keroul.qc.ca" target="_blank" rel="noopener">Kéroul (Culture & Tourisme accessible au Québec)</a></li>
+      <li><a href="https://www.stm.info/fr/accessibilite" target="_blank" rel="noopener">STM – Accessibilité universelle & état des ascenseurs</a></li>
+      <li><a href="https://rem.info/fr/accessibilite" target="_blank" rel="noopener">REM – Stations 100 % accessibles</a></li>
+      <li><a href="https://donnees.montreal.ca" target="_blank" rel="noopener">Données ouvertes de la Ville de Montréal</a></li>
+    </ul>
+  `;
+}
+
+// Event Wiring
+document.addEventListener("DOMContentLoaded", () => {
+  initMap();
+
+  document.getElementById("langSelect").onchange = e => { state.lang = e.target.value; applyLanguage(); };
+  document.getElementById("themeBtn").onclick = () => {
+    const order = ["light", "dark", "contrast"];
+    state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
+    applyTheme();
+  };
+  document.getElementById("textSizeBtn").onclick = () => { state.largeText = !state.largeText; applyTheme(); };
+
+  document.getElementById("searchInput").oninput = e => {
+    state.query = e.target.value;
+    state.renderLimit = 50;
+    applyFilters();
+  };
+  document.getElementById("searchInput").onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); geocodeInput(); }
+  };
+  document.getElementById("searchGeoBtn").onclick = geocodeInput;
+  document.getElementById("locateBtn").onclick = locateMe;
+  document.getElementById("radiusSelect").onchange = e => {
+    state.radiusKm = parseInt(e.target.value, 10) || 0;
+    if (state.radiusKm > 0 && !state.userLoc) locateMe();
+    else applyFilters();
+  };
+  document.getElementById("regionSelect").onchange = e => {
+    state.region = e.target.value;
+    state.renderLimit = 50;
+    applyFilters();
+  };
+  document.getElementById("verifiedOnlyBtn").onclick = e => {
+    state.verifiedOnly = !state.verifiedOnly;
+    e.currentTarget.classList.toggle("active", state.verifiedOnly);
+    applyFilters();
+  };
+  document.getElementById("favFilterBtn").onclick = () => {
+    state.favOnly = !state.favOnly;
+    updateFavCounter();
+    applyFilters();
+  };
+  document.getElementById("toggleAccBtn").onclick = e => {
+    state.accCollapsed = !state.accCollapsed;
+    e.currentTarget.textContent = state.accCollapsed ? "▸" : "▾";
+    renderFilterChips();
+  };
+  document.getElementById("resetFiltersBtn").onclick = () => {
+    state.query = ""; document.getElementById("searchInput").value = "";
+    state.region = "all"; document.getElementById("regionSelect").value = "all";
+    state.categories.clear(); state.features.clear();
+    state.verifiedOnly = false; document.getElementById("verifiedOnlyBtn").classList.remove("active");
+    state.favOnly = false; updateFavCounter();
+    state.renderLimit = 50;
+    clearUserLoc();
+  };
+  document.getElementById("resetMapBtn").onclick = () => map.setView([45.515, -73.60], 11);
+
+  document.getElementById("printBtn").onclick = () => window.print();
+  document.getElementById("shareBtn").onclick = async () => {
+    const shareList = state.favOnly || state.favorites.size > 0
+      ? state.places.filter(p => state.favorites.has(p.id))
+      : state.filtered.slice(0, 10);
+    const lines = [
+      `AccèsGrandMTL (${window.location.href})`,
+      ...shareList.map(p => `• ${p.name} — ${p.address} (https://maps.google.com/?q=${p.lat},${p.lng})`)
+    ].join("\n");
+    if (navigator.share) {
+      try { await navigator.share({ title: "AccèsGrandMTL", text: lines, url: window.location.href }); return; } catch (_) {}
+    }
+    await navigator.clipboard.writeText(lines);
+    showToast("📋 Liste et liens copiés dans le presse-papiers !");
+  };
+
+  document.getElementById("suggestBtn").onclick = () => openModal("suggestModal");
+  document.getElementById("infoBtn").onclick = () => { renderInfoModal(); openModal("infoModal"); };
+
+  document.getElementById("copyCsvBtn").onclick = async () => {
+    const p = buildSuggestPayload();
+    if (!p.name) { showToast("Entrez au moins le nom du lieu."); return; }
+    const csvLine = `"${p.name.replace(/"/g,'""')}",${p.category},${p.region},"${p.city}","${p.address.replace(/"/g,'""')}",${p.lat},${p.lng},"${p.phone}","${p.website}","${p.features.join("|")}","${p.desc_fr.replace(/"/g,'""')}","${p.desc_en.replace(/"/g,'""')}"`;
+    await navigator.clipboard.writeText(csvLine);
+    showToast("📋 Ligne CSV copiée ! Collez-la dans data/custom_places.csv sur GitHub.");
+  };
+
+  document.getElementById("suggestForm").onsubmit = e => {
+    e.preventDefault();
+    const p = buildSuggestPayload();
+    state.localSuggestions.unshift(p);
+    localStorage.setItem("agm_local_places", JSON.stringify(state.localSuggestions));
+    state.places.unshift(p);
+    closeModal("suggestModal");
+    e.target.reset();
+    applyFilters();
+    showToast("✅ Lieu ajouté à votre carte locale !");
+  };
+
+  document.getElementById("mobListBtn").onclick = () => setMobileView("list");
+  document.getElementById("mobMapBtn").onclick = () => setMobileView("map");
+
+  applyLanguage();
+  loadData();
+});
+</script>
+</body>
+</html>
