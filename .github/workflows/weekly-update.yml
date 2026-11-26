@@ -4,7 +4,7 @@ on:
   schedule:
     # Chaque dimanche à 07h00 UTC (03h00 heure de Montréal)
     - cron: '0 7 * * 0'
-  workflow_dispatch: # Permet de lancer la mise à jour manuellement en 1 clic sur GitHub
+  workflow_dispatch: # Bouton manuel "Run workflow" dans l'onglet Actions
   push:
     paths:
       - 'data/curated_places.json'
@@ -21,13 +21,448 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Configurer Python 3
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Télécharger et fusionner les lieux accessibles (Montréal, Rive-Sud, Rive-Nord)
-        run: python3 scripts/update_places.py
+        run: |
+          if [ -f "scripts/update_places.py" ]; then
+            echo "Exécution de scripts/update_places.py"
+            python3 scripts/update_places.py
+          elif [ -f "update_places.py" ]; then
+            echo "Exécution de update_places.py (racine)"
+            python3 update_places.py
+          else
+            echo "scripts/update_places.py absent du dépôt — exécution du robot intégré..."
+            python3 - << 'PYEOF'
+          #!/usr/bin/env python3
+          """
+          AccèsGrandMTL — Script de mise à jour hebdomadaire (GitHub Actions)
+          - Interroge OpenStreetMap (4 secteurs + 4 miroirs Overpass)
+          - Fusionne avec data/curated_places.json (ou extrait FALLBACK_PLACES de index.html si absent)
+            et data/custom_places.csv
+          - Préserve toutes les traductions (fr, en, zh, vi, ar, es, ht) et génère data/places.json.
+          Aucune dépendance externe requise (Python 3 standard uniquement).
+          """
+
+          import csv
+          import json
+          import math
+          import os
+          import re
+          import sys
+          import time
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+
+          ROOT_DIR = os.getcwd()
+          if "__file__" in globals():
+              _script_dir = os.path.dirname(os.path.abspath(__file__))
+              if os.path.basename(_script_dir) == "scripts":
+                  ROOT_DIR = os.path.dirname(_script_dir)
+
+          DATA_DIR = os.path.join(ROOT_DIR, "data")
+          CURATED_PATH = os.path.join(DATA_DIR, "curated_places.json")
+          CUSTOM_CSV_PATH = os.path.join(DATA_DIR, "custom_places.csv")
+          OUTPUT_PATH = os.path.join(DATA_DIR, "places.json")
+          INDEX_HTML_PATH = os.path.join(ROOT_DIR, "index.html")
+
+          OVERPASS_ENDPOINTS = [
+              "https://overpass-api.de/api/interpreter",
+              "https://overpass.kumi.systems/api/interpreter",
+              "https://lz4.overpass-api.de/api/interpreter",
+              "https://z.overpass-api.de/api/interpreter",
+          ]
+
+          REGIONS_BBOX = [
+              ("montreal", "Montréal Centre & Est", 45.41, -73.68, 45.70, -73.47),
+              ("montreal", "Montréal Ouest & Île-Bizard", 45.39, -73.98, 45.55, -73.68),
+              ("rive-sud", "Rive-Sud (Longueuil, Brossard, Boucherville, Châteauguay, Beloeil)", 45.32, -73.78, 45.64, -73.18),
+              ("rive-nord", "Rive-Nord & Laval (Laval, Blainville, Terrebonne, Saint-Eustache)", 45.51, -74.05, 45.80, -73.40),
+          ]
+
+          MONTREAL_ISLAND_CITIES = {
+              "montreal", "montréal", "westmount", "outremont", "mont-royal", "mount royal",
+              "cote-saint-luc", "côte-saint-luc", "hampstead", "montreal-ouest", "montréal-ouest",
+              "montreal-est", "montréal-est", "dorval", "pointe-claire", "kirkland", "beaconsfield",
+              "baie-d'urfe", "baie-d'urfé", "sainte-anne-de-bellevue", "senneville", "dollard-des-ormeaux",
+              "lasalle", "lachine", "verdun", "saint-laurent", "anjou", "saint-leonard", "saint-léonard",
+              "pierrefonds", "roxboro", "ile-bizard", "île-bizard"
+          }
+
+          RIVE_SUD_CITIES = {
+              "longueuil", "brossard", "saint-lambert", "greenfield park", "saint-hubert",
+              "boucherville", "saint-bruno-de-montarville", "saint-bruno", "la prairie",
+              "candiac", "delson", "sainte-catherine", "saint-constant", "chateauguay", "châteauguay",
+              "chambly", "carignan", "beloeil", "mcmasterville", "mont-saint-hilaire",
+              "saint-basile-le-grand", "sainte-julie", "varennes", "saint-jean-sur-richelieu",
+              "mercier", "lery", "léry", "beauharnois", "kahnawake"
+          }
+
+          RIVE_NORD_CITIES = {
+              "laval", "terrebonne", "mascouche", "repentigny", "charlemagne", "l'assomption",
+              "boisbriand", "rosemere", "rosemère", "lorraine", "bois-des-filion", "sainte-therese",
+              "sainte-thérèse", "blainville", "mirabel", "saint-eustache", "deux-montagnes",
+              "sainte-marthe-sur-le-lac", "pointe-calumet", "oka", "saint-joseph-du-lac",
+              "saint-jerome", "saint-jérôme", "sainte-anne-des-plaines"
+          }
+
+
+          def normalize_text(s: str) -> str:
+              if not s:
+                  return ""
+              s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+              return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+
+          def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+              r = 6371000.0
+              p1, p2 = math.radians(lat1), math.radians(lat2)
+              dp = math.radians(lat2 - lat1)
+              dl = math.radians(lon2 - lon1)
+              a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+              return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+          def infer_region(city: str, lat: float, lng: float, fallback_region: str) -> str:
+              c = (city or "").strip().lower()
+              if c in MONTREAL_ISLAND_CITIES:
+                  return "montreal"
+              if c in RIVE_SUD_CITIES:
+                  return "rive-sud"
+              if c in RIVE_NORD_CITIES:
+                  return "rive-nord"
+              if lat < 45.49 and lng > -73.53:
+                  return "rive-sud"
+              if lat < 45.42 and lng > -73.76:
+                  return "rive-sud"
+              if lat > 45.555 and lng < -73.68:
+                  return "rive-nord"
+              if lat > 45.65:
+                  return "rive-nord"
+              return fallback_region
+
+
+          def classify_category(tags: dict) -> str:
+              amenity = tags.get("amenity", "")
+              shop = tags.get("shop", "")
+              leisure = tags.get("leisure", "")
+              tourism = tags.get("tourism", "")
+              healthcare = tags.get("healthcare", "")
+              public_transport = tags.get("public_transport", "")
+              railway = tags.get("railway", "")
+              office = tags.get("office", "")
+              sport = tags.get("sport", "")
+
+              if amenity == "pharmacy" or shop in ("medical_supply", "hearing_aids", "mobility"):
+                  return "pharmacie"
+              if (
+                  amenity in ("hospital", "clinic", "doctors", "dentist", "nursing_home")
+                  or healthcare in ("hospital", "clinic", "doctor", "dentist", "optometrist", "physiotherapist", "occupational_therapist", "rehabilitation", "laboratory", "psychotherapist", "podiatrist")
+                  or shop == "optician"
+              ):
+                  return "soins"
+              if (
+                  railway in ("station", "subway_entrance", "light_rail")
+                  or public_transport in ("station", "stop_position")
+                  or amenity in ("bus_station", "ferry_terminal")
+                  or tags.get("station") in ("subway", "light_rail")
+              ):
+                  return "transport"
+              if amenity == "library" or tourism in ("hotel", "motel", "hostel", "guest_house"):
+                  return "hebergement"
+              if leisure in ("sports_centre", "swimming_pool", "fitness_centre", "ice_rink", "stadium", "bowling_alley") or sport != "":
+                  return "sports"
+              if leisure in ("park", "nature_reserve", "garden", "marina", "beach_resort", "playground") or tags.get("natural") == "beach":
+                  return "parcs"
+              if tourism in ("museum", "gallery", "attraction", "zoo", "aquarium", "theme_park", "viewpoint") or amenity in ("theatre", "cinema", "arts_centre", "planetarium", "casino", "music_venue"):
+                  return "loisirs"
+              if amenity in ("restaurant", "cafe", "fast_food", "food_court", "ice_cream", "pub", "bar", "bistro"):
+                  return "resto"
+              if (
+                  amenity in ("community_centre", "social_facility", "townhall", "post_office", "bank", "public_building", "courthouse", "police")
+                  or shop in ("hairdresser", "beauty", "dry_cleaning", "laundry", "travel_agency")
+                  or office in ("association", "ngo", "government", "foundation", "charity", "insurance")
+              ):
+                  return "services"
+              if shop in (
+                  "supermarket", "grocery", "convenience", "greengrocer", "bakery", "butcher",
+                  "mall", "department_store", "hardware", "doityourself", "furniture", "books",
+                  "clothes", "electronics", "variety_store", "general", "alcohol", "wholesale"
+              ) or amenity == "marketplace":
+                  return "avd"
+              return ""
+
+
+          def extract_features(tags: dict, category: str) -> list:
+              feats = set()
+              wc = tags.get("wheelchair", "")
+              wc_toilet = tags.get("toilets:wheelchair", "")
+              ramp = tags.get("ramp", "") or tags.get("ramp:wheelchair", "")
+              auto_door = tags.get("automatic_door", "")
+              elevator = tags.get("elevator", "")
+              tactile = tags.get("tactile_paving", "") or tags.get("blind", "")
+
+              if wc in ("yes", "designated"):
+                  feats.add("step_free")
+              if ramp in ("yes", "separate", "automatic"):
+                  feats.add("ramp")
+              if auto_door in ("yes", "button", "motion", "continuous"):
+                  feats.add("auto_door")
+              if wc_toilet in ("yes", "designated"):
+                  feats.add("toilet")
+              if tags.get("parking") or tags.get("capacity:disabled") or tags.get("parking:disabled") == "yes":
+                  feats.add("parking")
+              if elevator == "yes" or (tags.get("level") not in (None, "", "0") and wc == "yes" and category == "transport"):
+                  feats.add("elevator")
+              if tactile in ("yes", "contrasted"):
+                  feats.add("sensory_tactile")
+              if tags.get("changing_table:adult") == "yes" or tags.get("hoist") == "yes":
+                  feats.add("hoist_lift")
+              if category in ("avd", "pharmacie") and wc == "yes":
+                  feats.add("wide_aisles")
+              if category == "soins" and tags.get("amenity") == "hospital":
+                  feats.update(["auto_door", "toilet", "elevator", "parking"])
+
+              return sorted(feats)
+
+
+          def build_address(tags: dict, city: str) -> str:
+              num = tags.get("addr:housenumber", "").strip()
+              street = tags.get("addr:street", "").strip()
+              postcode = tags.get("addr:postcode", "").strip()
+              parts = []
+              if num and street:
+                  parts.append(f"{num}, {street}")
+              elif street:
+                  parts.append(street)
+              if city:
+                  parts.append(city)
+              if postcode:
+                  parts.append(postcode)
+              if parts:
+                  return ", ".join(parts)
+              return f"{city}, QC" if city else "Grand Montréal, QC"
+
+
+          def fetch_overpass_bbox(south: float, west: float, north: float, east: float) -> list:
+              bbox = f"{south},{west},{north},{east}"
+              query = f"""
+          [out:json][timeout:45];
+          (
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy|restaurant|cafe|fast_food|food_court|library|theatre|cinema|arts_centre|community_centre|social_facility|bank|post_office|townhall|marketplace|bus_station)$"]({bbox});
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["shop"~"^(supermarket|grocery|bakery|mall|department_store|optician|medical_supply|hairdresser|hardware|furniture|books|convenience|wholesale)$"]({bbox});
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["leisure"~"^(sports_centre|swimming_pool|fitness_centre|park|nature_reserve|garden|ice_rink|stadium)$"]({bbox});
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["tourism"~"^(museum|gallery|attraction|hotel|zoo|aquarium|viewpoint)$"]({bbox});
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["healthcare"]({bbox});
+            nwr["wheelchair"~"^(yes|designated)$"]["name"]["railway"~"^(station|subway_entrance)$"]({bbox});
+            nwr["toilets:wheelchair"="yes"]["name"]({bbox});
+          );
+          out center tags qt;
+          """
+              payload = urllib.parse.urlencode({"data": query}).encode("utf-8")
+              headers = {
+                  "User-Agent": "AccesGrandMTL-WeeklyUpdater/2.0 (https://github.com)",
+                  "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+              }
+              for endpoint in OVERPASS_ENDPOINTS:
+                  try:
+                      req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+                      with urllib.request.urlopen(req, timeout=55) as resp:
+                          data = json.loads(resp.read().decode("utf-8"))
+                          elements = data.get("elements", [])
+                          print(f"  [OK] {endpoint} -> {len(elements)} éléments bruts")
+                          return elements
+                  except Exception as exc:
+                      print(f"  [WARN] Échec sur {endpoint}: {exc}")
+                      time.sleep(2)
+              return []
+
+
+          def load_curated() -> list:
+              if os.path.exists(CURATED_PATH):
+                  with open(CURATED_PATH, "r", encoding="utf-8") as f:
+                      return json.load(f)
+              if os.path.exists(INDEX_HTML_PATH):
+                  with open(INDEX_HTML_PATH, "r", encoding="utf-8") as f:
+                      html = f.read()
+                  m = re.search(r"const\s+FALLBACK_PLACES\s*=\s*(\[.*?\]);", html, re.S)
+                  if m:
+                      try:
+                          parsed = json.loads(m.group(1))
+                          print(f"Base vérifiée extraite automatiquement depuis index.html : {len(parsed)} lieux")
+                          return parsed
+                      except Exception as exc:
+                          print(f"[WARN] Impossible d'extraire FALLBACK_PLACES: {exc}")
+              return []
+
+
+          def load_custom_csv() -> list:
+              if not os.path.exists(CUSTOM_CSV_PATH):
+                  return []
+              rows = []
+              with open(CUSTOM_CSV_PATH, "r", encoding="utf-8-sig") as f:
+                  reader = csv.DictReader(f)
+                  for idx, r in enumerate(reader):
+                      name = (r.get("name") or "").strip()
+                      if not name or "Clinique Exemple" in name:
+                          continue
+                      try:
+                          lat = float(r.get("lat", ""))
+                          lng = float(r.get("lng", ""))
+                      except ValueError:
+                          continue
+                      feats = [x.strip() for x in (r.get("features") or "").split("|") if x.strip()]
+                      entry = {
+                          "id": f"csv-{idx+1}",
+                          "name": name,
+                          "category": (r.get("category") or "services").strip(),
+                          "region": (r.get("region") or "montreal").strip(),
+                          "city": (r.get("city") or "Montréal").strip(),
+                          "address": (r.get("address") or "").strip(),
+                          "lat": round(lat, 6),
+                          "lng": round(lng, 6),
+                          "phone": (r.get("phone") or "").strip(),
+                          "website": (r.get("website") or "").strip(),
+                          "features": feats or ["step_free"],
+                          "desc_fr": (r.get("desc_fr") or "").strip(),
+                          "desc_en": (r.get("desc_en") or "").strip(),
+                          "source": "custom_csv",
+                          "verified": True,
+                      }
+                      for lang in ("zh", "vi", "ar", "es", "ht"):
+                          val = (r.get(f"desc_{lang}") or "").strip()
+                          if val:
+                              entry[f"desc_{lang}"] = val
+                      rows.append(entry)
+              return rows
+
+
+          def main():
+              os.makedirs(DATA_DIR, exist_ok=True)
+              print("=== AccèsGrandMTL : Démarrage de la mise à jour hebdomadaire ===")
+              curated = load_curated()
+              custom_rows = load_custom_csv()
+              print(f"Base clinique vérifiée : {len(curated)} lieux")
+              print(f"Ajouts CSV personnalisés : {len(custom_rows)} lieux")
+
+              merged = []
+              seen = []
+
+              def is_duplicate(name: str, lat: float, lng: float) -> bool:
+                  nn = normalize_text(name)
+                  for s_name, s_lat, s_lng in seen:
+                      dist = haversine_m(lat, lng, s_lat, s_lng)
+                      if dist < 80 and (nn == s_name or nn in s_name or s_name in nn):
+                          return True
+                      if dist < 25 and nn[:10] == s_name[:10]:
+                          return True
+                  return False
+
+              for p in curated + custom_rows:
+                  merged.append(p)
+                  seen.append((normalize_text(p["name"]), p["lat"], p["lng"]))
+
+              osm_added = 0
+              seen_osm_ids = set()
+
+              for region_code, label, south, west, north, east in REGIONS_BBOX:
+                  print(f"\nInterrogation secteur : {label} ...")
+                  elements = fetch_overpass_bbox(south, west, north, east)
+                  time.sleep(3)
+
+                  for el in elements:
+                      osm_key = f"{el.get('type','n')}-{el.get('id')}"
+                      if osm_key in seen_osm_ids:
+                          continue
+                      seen_osm_ids.add(osm_key)
+
+                      tags = el.get("tags", {})
+                      name = (tags.get("name") or tags.get("name:fr") or "").strip()
+                      if not name or len(name) < 2:
+                          continue
+
+                      lat = el.get("lat") or (el.get("center") or {}).get("lat")
+                      lng = el.get("lon") or (el.get("center") or {}).get("lon")
+                      if lat is None or lng is None:
+                          continue
+
+                      category = classify_category(tags)
+                      if not category:
+                          continue
+
+                      if is_duplicate(name, lat, lng):
+                          continue
+
+                      city = (tags.get("addr:city") or tags.get("addr:suburb") or "").strip()
+                      region = infer_region(city, lat, lng, region_code)
+                      if not city:
+                          city = {"montreal": "Montréal", "rive-sud": "Rive-Sud", "rive-nord": "Rive-Nord"}.get(region, "Grand Montréal")
+
+                      features = extract_features(tags, category)
+                      website = (tags.get("website") or tags.get("contact:website") or "").strip()
+                      if website and not website.startswith(("http://", "https://")):
+                          website = "https://" + website
+                      phone = (tags.get("phone") or tags.get("contact:phone") or "").strip()
+                      hours = (tags.get("opening_hours") or "").strip()
+                      osm_note = (tags.get("wheelchair:description:fr") or tags.get("wheelchair:description") or "").strip()[:140]
+
+                      place = {
+                          "id": f"osm-{osm_key}",
+                          "name": name,
+                          "category": category,
+                          "region": region,
+                          "city": city,
+                          "address": build_address(tags, city),
+                          "lat": round(float(lat), 6),
+                          "lng": round(float(lng), 6),
+                          "phone": phone,
+                          "website": website,
+                          "features": features,
+                          "hours": hours if len(hours) < 70 else "",
+                          "osm_note": osm_note,
+                          "source": "openstreetmap",
+                          "verified": False,
+                      }
+                      merged.append(place)
+                      seen.append((normalize_text(name), place["lat"], place["lng"]))
+                      osm_added += 1
+
+              print(f"\nTotal OSM ajoutés (après dédoublonnage) : {osm_added}")
+              print(f"Total combiné : {len(merged)}")
+
+              if os.path.exists(OUTPUT_PATH) and osm_added == 0:
+                  try:
+                      with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
+                          existing = json.load(f)
+                      if existing.get("total_count", 0) > len(merged):
+                          print("Aucun nouveau lieu OSM récupéré — conservation de la base existante.")
+                          sys.exit(0)
+                  except Exception:
+                      pass
+
+              merged.sort(key=lambda x: (0 if x.get("verified") else 1, normalize_text(x.get("name", ""))))
+
+              payload = {
+                  "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "total_count": len(merged),
+                  "sources": {
+                      "curated": len(curated),
+                      "custom_csv": len(custom_rows),
+                      "openstreetmap": osm_added,
+                  },
+                  "places": merged,
+              }
+
+              with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+                  json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+
+              print(f"[SUCCÈS] {OUTPUT_PATH} mis à jour avec {len(merged)} lieux.")
+
+
+          if __name__ == "__main__":
+              main()
+          PYEOF
+          fi
 
       - name: Enregistrer data/places.json s'il y a des changements
         run: |
