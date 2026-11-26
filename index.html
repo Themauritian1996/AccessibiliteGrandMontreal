@@ -819,25 +819,39 @@ function escapeHtml(str) {
 
 // Init Map
 function initMap() {
-  map = L.map("map", { zoomControl: true }).setView([45.515, -73.60], 11);
-  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 48, disableClusteringAtZoom: 16 });
-  map.addLayer(clusterGroup);
+  if (typeof L === "undefined") {
+    showToast("⚠️ Carte indisponible (ressource Leaflet bloquée)");
+    return;
+  }
+  map = L.map("map", { zoomControl: true, minZoom: 8, maxZoom: 19 });
   applyTileLayer();
+  map.setView([45.515, -73.60], 11);
+  if (typeof L.markerClusterGroup === "function") {
+    clusterGroup = L.markerClusterGroup({ maxClusterRadius: 48, disableClusteringAtZoom: 16, maxZoom: 19 });
+    map.addLayer(clusterGroup);
+  } else {
+    clusterGroup = L.layerGroup().addTo(map);
+  }
+  setTimeout(() => map && map.invalidateSize(), 150);
 }
 
 function applyTileLayer() {
-  if (!map) return;
-  if (tileLayer) map.removeLayer(tileLayer);
+  if (!map || typeof L === "undefined") return;
   let url = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   if (state.theme === "dark") {
     url = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
   } else if (state.theme === "contrast") {
     url = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
   }
-  tileLayer = L.tileLayer(url, {
+  const nextLayer = L.tileLayer(url, {
     attribution: '&copy; OpenStreetMap &copy; CARTO',
-    subdomains: "abcd", maxZoom: 19
-  }).addTo(map);
+    subdomains: "abcd", minZoom: 8, maxZoom: 19
+  });
+  nextLayer.addTo(map);
+  if (tileLayer) {
+    map.removeLayer(tileLayer);
+  }
+  tileLayer = nextLayer;
 }
 
 function applyTheme() {
@@ -1083,7 +1097,8 @@ function renderMapMarkers() {
     markerById.set(p.id, m);
     markers.push(m);
   }
-  clusterGroup.addLayers(markers);
+  if (typeof clusterGroup.addLayers === "function") clusterGroup.addLayers(markers);
+  else markers.forEach(mk => clusterGroup.addLayer(mk));
 
   // User location & radius circle
   if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
@@ -1109,10 +1124,15 @@ function focusPlace(id) {
   setTimeout(() => {
     map.invalidateSize();
     if (m) {
-      clusterGroup.zoomToShowLayer(m, () => {
+      if (typeof clusterGroup.zoomToShowLayer === "function") {
+        clusterGroup.zoomToShowLayer(m, () => {
+          map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15));
+          m.openPopup();
+        });
+      } else {
         map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15));
         m.openPopup();
-      });
+      }
     } else {
       map.setView([p.lat, p.lng], 15);
     }
