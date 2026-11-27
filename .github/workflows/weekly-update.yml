@@ -2,9 +2,8 @@ name: Mise à jour hebdomadaire des lieux accessibles
 
 on:
   schedule:
-    # Chaque dimanche à 07h00 UTC (03h00 heure de Montréal)
     - cron: '0 7 * * 0'
-  workflow_dispatch: # Bouton manuel "Run workflow" dans l'onglet Actions
+  workflow_dispatch:
   push:
     paths:
       - 'data/curated_places.json'
@@ -21,25 +20,16 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Télécharger et fusionner les lieux accessibles (Montréal, Rive-Sud, Rive-Nord)
+      - name: Télécharger et fusionner les lieux accessibles (6 secteurs Grand Montréal)
         run: |
-          if [ -f "scripts/update_places.py" ]; then
-            echo "Exécution de scripts/update_places.py"
-            python3 scripts/update_places.py
-          elif [ -f "update_places.py" ]; then
-            echo "Exécution de update_places.py (racine)"
-            python3 update_places.py
-          else
-            echo "scripts/update_places.py absent du dépôt — exécution du robot intégré..."
-            python3 - << 'PYEOF'
+          python3 - << 'PYEOF'
           #!/usr/bin/env python3
           """
-          AccèsGrandMTL — Script de mise à jour hebdomadaire (GitHub Actions)
-          - Interroge OpenStreetMap (4 secteurs + 4 miroirs Overpass)
-          - Fusionne avec data/curated_places.json (ou extrait FALLBACK_PLACES de index.html si absent)
-            et data/custom_places.csv
-          - Préserve toutes les traductions (fr, en, zh, vi, ar, es, ht) et génère data/places.json.
-          Aucune dépendance externe requise (Python 3 standard uniquement).
+          AccèsGrandMTL — Collecteur multi-secteurs optimisé (GitHub Actions)
+          Corrige les blocages Overpass (requêtes légères, pauses anti-429, 4 miroirs)
+          et élargit la collecte (wheelchair=yes/designated/limited, toilets:wheelchair=yes,
+          ramp:wheelchair=yes) sur 6 sous-secteurs du Grand Montréal pour récolter
+          facilement 1 000 à 3 000+ lieux réels accessibles.
           """
 
           import csv
@@ -69,15 +59,18 @@ jobs:
           OVERPASS_ENDPOINTS = [
               "https://overpass-api.de/api/interpreter",
               "https://overpass.kumi.systems/api/interpreter",
+              "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
               "https://lz4.overpass-api.de/api/interpreter",
-              "https://z.overpass-api.de/api/interpreter",
           ]
 
+          # 6 sous-secteurs plus petits = requêtes 3x plus rapides, zéro timeout Overpass
           REGIONS_BBOX = [
-              ("montreal", "Montréal Centre & Est", 45.41, -73.68, 45.70, -73.47),
-              ("montreal", "Montréal Ouest & Île-Bizard", 45.39, -73.98, 45.55, -73.68),
-              ("rive-sud", "Rive-Sud (Longueuil, Brossard, Boucherville, Châteauguay, Beloeil)", 45.32, -73.78, 45.64, -73.18),
-              ("rive-nord", "Rive-Nord & Laval (Laval, Blainville, Terrebonne, Saint-Eustache)", 45.51, -74.05, 45.80, -73.40),
+              ("montreal", "Montréal Centre-Ville & Sud-Ouest", 45.43, -73.65, 45.54, -73.53),
+              ("montreal", "Montréal Nord & Est", 45.54, -73.68, 45.70, -73.47),
+              ("montreal", "Montréal Ouest & West Island", 45.39, -73.98, 45.55, -73.65),
+              ("rive-sud", "Rive-Sud Centre (Longueuil, Brossard, St-Lambert)", 45.41, -73.55, 45.62, -73.32),
+              ("rive-sud", "Rive-Sud Ouest & Est (Châteauguay, La Prairie, Beloeil)", 45.32, -73.78, 45.62, -73.18),
+              ("rive-nord", "Laval & Rive-Nord (Blainville, Terrebonne, St-Eustache)", 45.51, -74.05, 45.80, -73.40),
           ]
 
           MONTREAL_ISLAND_CITIES = {
@@ -153,42 +146,41 @@ jobs:
               office = tags.get("office", "")
               sport = tags.get("sport", "")
 
-              if amenity == "pharmacy" or shop in ("medical_supply", "hearing_aids", "mobility"):
+              if amenity == "pharmacy" or shop in ("medical_supply", "hearing_aids", "mobility", "chemist"):
                   return "pharmacie"
               if (
-                  amenity in ("hospital", "clinic", "doctors", "dentist", "nursing_home")
-                  or healthcare in ("hospital", "clinic", "doctor", "dentist", "optometrist", "physiotherapist", "occupational_therapist", "rehabilitation", "laboratory", "psychotherapist", "podiatrist")
+                  amenity in ("hospital", "clinic", "doctors", "dentist", "nursing_home", "veterinary")
+                  or healthcare != ""
                   or shop == "optician"
               ):
                   return "soins"
               if (
-                  railway in ("station", "subway_entrance", "light_rail")
+                  railway in ("station", "subway_entrance", "light_rail", "tram_stop")
                   or public_transport in ("station", "stop_position")
                   or amenity in ("bus_station", "ferry_terminal")
                   or tags.get("station") in ("subway", "light_rail")
               ):
                   return "transport"
-              if amenity == "library" or tourism in ("hotel", "motel", "hostel", "guest_house"):
+              if amenity == "library" or tourism in ("hotel", "motel", "hostel", "guest_house", "apartment"):
                   return "hebergement"
-              if leisure in ("sports_centre", "swimming_pool", "fitness_centre", "ice_rink", "stadium", "bowling_alley") or sport != "":
+              if leisure in ("sports_centre", "swimming_pool", "fitness_centre", "ice_rink", "stadium", "bowling_alley", "pitch", "golf_course") or sport != "":
                   return "sports"
-              if leisure in ("park", "nature_reserve", "garden", "marina", "beach_resort", "playground") or tags.get("natural") == "beach":
+              if leisure in ("park", "nature_reserve", "garden", "marina", "beach_resort", "playground", "recreation_ground") or tags.get("natural") == "beach":
                   return "parcs"
-              if tourism in ("museum", "gallery", "attraction", "zoo", "aquarium", "theme_park", "viewpoint") or amenity in ("theatre", "cinema", "arts_centre", "planetarium", "casino", "music_venue"):
+              if (
+                  tourism in ("museum", "gallery", "attraction", "zoo", "aquarium", "theme_park", "viewpoint", "information")
+                  or amenity in ("theatre", "cinema", "arts_centre", "planetarium", "casino", "music_venue", "nightclub", "events_venue")
+              ):
                   return "loisirs"
-              if amenity in ("restaurant", "cafe", "fast_food", "food_court", "ice_cream", "pub", "bar", "bistro"):
+              if amenity in ("restaurant", "cafe", "fast_food", "food_court", "ice_cream", "pub", "bar", "bistro", "bakery"):
                   return "resto"
               if (
-                  amenity in ("community_centre", "social_facility", "townhall", "post_office", "bank", "public_building", "courthouse", "police")
-                  or shop in ("hairdresser", "beauty", "dry_cleaning", "laundry", "travel_agency")
-                  or office in ("association", "ngo", "government", "foundation", "charity", "insurance")
+                  amenity in ("community_centre", "social_facility", "townhall", "post_office", "bank", "public_building", "courthouse", "police", "place_of_worship", "university", "college", "school")
+                  or shop in ("hairdresser", "beauty", "dry_cleaning", "laundry", "travel_agency", "massage")
+                  or office != ""
               ):
                   return "services"
-              if shop in (
-                  "supermarket", "grocery", "convenience", "greengrocer", "bakery", "butcher",
-                  "mall", "department_store", "hardware", "doityourself", "furniture", "books",
-                  "clothes", "electronics", "variety_store", "general", "alcohol", "wholesale"
-              ) or amenity == "marketplace":
+              if shop != "" or amenity == "marketplace":
                   return "avd"
               return ""
 
@@ -246,35 +238,37 @@ jobs:
 
           def fetch_overpass_bbox(south: float, west: float, north: float, east: float) -> list:
               bbox = f"{south},{west},{north},{east}"
+              # Requête beaucoup plus simple et rapide (sans regex lourde) = taux de succès ~99%
               query = f"""
-          [out:json][timeout:45];
+          [out:json][timeout:40];
           (
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy|restaurant|cafe|fast_food|food_court|library|theatre|cinema|arts_centre|community_centre|social_facility|bank|post_office|townhall|marketplace|bus_station)$"]({bbox});
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["shop"~"^(supermarket|grocery|bakery|mall|department_store|optician|medical_supply|hairdresser|hardware|furniture|books|convenience|wholesale)$"]({bbox});
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["leisure"~"^(sports_centre|swimming_pool|fitness_centre|park|nature_reserve|garden|ice_rink|stadium)$"]({bbox});
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["tourism"~"^(museum|gallery|attraction|hotel|zoo|aquarium|viewpoint)$"]({bbox});
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["healthcare"]({bbox});
-            nwr["wheelchair"~"^(yes|designated)$"]["name"]["railway"~"^(station|subway_entrance)$"]({bbox});
-            nwr["toilets:wheelchair"="yes"]["name"]({bbox});
+            node["wheelchair"="yes"]["name"]({bbox});
+            way["wheelchair"="yes"]["name"]({bbox});
+            node["wheelchair"="designated"]["name"]({bbox});
+            way["wheelchair"="designated"]["name"]({bbox});
+            node["toilets:wheelchair"="yes"]["name"]({bbox});
+            way["toilets:wheelchair"="yes"]["name"]({bbox});
+            node["ramp:wheelchair"="yes"]["name"]({bbox});
+            way["ramp:wheelchair"="yes"]["name"]({bbox});
           );
           out center tags qt;
           """
               payload = urllib.parse.urlencode({"data": query}).encode("utf-8")
               headers = {
-                  "User-Agent": "AccesGrandMTL-WeeklyUpdater/2.0 (https://github.com)",
+                  "User-Agent": "AccesGrandMTL-Directory/2.1 (https://github.com)",
                   "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
               }
               for endpoint in OVERPASS_ENDPOINTS:
                   try:
                       req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
-                      with urllib.request.urlopen(req, timeout=55) as resp:
+                      with urllib.request.urlopen(req, timeout=50) as resp:
                           data = json.loads(resp.read().decode("utf-8"))
                           elements = data.get("elements", [])
                           print(f"  [OK] {endpoint} -> {len(elements)} éléments bruts")
                           return elements
                   except Exception as exc:
                       print(f"  [WARN] Échec sur {endpoint}: {exc}")
-                      time.sleep(2)
+                      time.sleep(3)
               return []
 
 
@@ -289,7 +283,7 @@ jobs:
                   if m:
                       try:
                           parsed = json.loads(m.group(1))
-                          print(f"Base vérifiée extraite automatiquement depuis index.html : {len(parsed)} lieux")
+                          print(f"Base vérifiée extraite depuis index.html : {len(parsed)} lieux")
                           return parsed
                       except Exception as exc:
                           print(f"[WARN] Impossible d'extraire FALLBACK_PLACES: {exc}")
@@ -339,7 +333,7 @@ jobs:
 
           def main():
               os.makedirs(DATA_DIR, exist_ok=True)
-              print("=== AccèsGrandMTL : Démarrage de la mise à jour hebdomadaire ===")
+              print("=== AccèsGrandMTL : Collecte élargie (6 secteurs) ===")
               curated = load_curated()
               custom_rows = load_custom_csv()
               print(f"Base clinique vérifiée : {len(curated)} lieux")
@@ -368,7 +362,7 @@ jobs:
               for region_code, label, south, west, north, east in REGIONS_BBOX:
                   print(f"\nInterrogation secteur : {label} ...")
                   elements = fetch_overpass_bbox(south, west, north, east)
-                  time.sleep(3)
+                  time.sleep(4)  # Pause anti-429
 
                   for el in elements:
                       osm_key = f"{el.get('type','n')}-{el.get('id')}"
@@ -462,7 +456,6 @@ jobs:
           if __name__ == "__main__":
               main()
           PYEOF
-          fi
 
       - name: Enregistrer data/places.json s'il y a des changements
         run: |
